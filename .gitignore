@@ -1,0 +1,145 @@
+# ================================
+# Axon ERP - Git Ignore Rules
+# ================================
+
+# Python Virtual Environment
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# ================================
+# Frappe/ERPNext - Backend
+# ================================
+
+# Virtual Environment (inside frappe-bench)
+backend/frappe-bench/env/
+
+# Logs
+backend/frappe-bench/logs/
+backend/frappe-bench/sites/*/logs/
+*.log
+*.log.*
+
+# Site Folders - Exclude All Site Data
+# Only keep apps.json and apps.txt for reference
+backend/frappe-bench/sites/*/
+backend/frappe-bench/sites/assets/
+backend/frappe-bench/sites/common_site_config.json
+!backend/frappe-bench/sites/apps.json
+!backend/frappe-bench/sites/apps.txt
+
+# Redis & Process Files
+backend/frappe-bench/config/pids/
+*.rdb
+*.aof
+
+# ERPNext & Frappe Source Code (dependencies, not our code)
+# We only want to commit our custom app: axon_erp
+backend/frappe-bench/apps/erpnext/
+backend/frappe-bench/apps/frappe/
+
+# Node modules in backend apps
+backend/frappe-bench/apps/*/node_modules/
+
+# ================================
+# Frontend - Next.js
+# ================================
+
+# Dependencies
+frontend/node_modules/
+frontend/.pnp
+frontend/.pnp.*
+frontend/.yarn/*
+!frontend/.yarn/patches
+!frontend/.yarn/plugins
+!frontend/.yarn/releases
+!frontend/.yarn/versions
+
+# Testing
+frontend/coverage/
+
+# Next.js Build Output
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# Production
+frontend/dist/
+
+# Misc
+frontend/.DS_Store
+frontend/*.pem
+
+# Debug
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+
+# Environment Variables
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# Vercel
+frontend/.vercel
+
+# TypeScript
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+
+# ================================
+# Root Level Files
+# ================================
+
+# Log files
+backend.log
+frontend.log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.pem
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# Database Dumps
+*.sql
+*.sql.gz
+*.dump
+
+# Temporary Files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# ================================
+# Git & Version Control
+# ================================
+*.orig
+*.rej
+
