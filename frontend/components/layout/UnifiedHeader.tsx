@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, User } from 'lucide-react'
+import { Bell, User, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SearchBar } from './SearchBar'
 import { Breadcrumbs } from './Breadcrumbs'
+import { useAuth } from '@/lib/auth/AuthContext'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 export function UnifiedHeader() {
+  const { logout, user } = useAuth()
   return (
     <header className="h-14 border-b bg-white sticky top-0 z-50">
       <div className="flex items-center justify-between px-6 h-full max-w-full">
@@ -56,13 +58,17 @@ export function UnifiedHeader() {
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem className="text-sm">
                 <User className="h-4 w-4 mr-2" />
-                Profile
+                {user?.email || 'Profile'}
               </DropdownMenuItem>
               <DropdownMenuItem className="text-sm">
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-sm text-destructive">
+              <DropdownMenuItem 
+                className="text-sm text-destructive"
+                onClick={logout}
+              >
+                <LogOut className="h-4 w-4 mr-2" />
                 Logout
               </DropdownMenuItem>
             </DropdownMenuContent>

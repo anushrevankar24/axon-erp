@@ -12,36 +12,85 @@ BACKEND_DIR="$SCRIPT_DIR/backend/frappe-bench"
 FRONTEND_DIR="$SCRIPT_DIR/frontend"
 
 # Check nginx status
+NGINX_RUNNING=false
+NGINX_PORT_80=false
+
 echo "[INFO] Checking Nginx status..."
+
 if command -v systemctl &> /dev/null; then
     # Linux with systemd
     if systemctl is-active --quiet nginx; then
-        echo "[SUCCESS] Nginx is running"
+        NGINX_RUNNING=true
+        echo "[SUCCESS] Nginx service is active"
     else
-        echo "[WARNING] Nginx is not running!"
-        echo "          Start it with: sudo systemctl start nginx"
-        echo "          See nginx/README.md for setup instructions"
+        echo "[ERROR] Nginx service is not running!"
+        echo "        Start it with: sudo systemctl start nginx"
+        echo "        Enable on boot: sudo systemctl enable nginx"
     fi
 elif command -v brew &> /dev/null && brew services list | grep -q "nginx.*started"; then
     # macOS with Homebrew
-    echo "[SUCCESS] Nginx is running"
+    NGINX_RUNNING=true
+    echo "[SUCCESS] Nginx is running (Homebrew)"
 else
     # Check if nginx process exists
     if pgrep -x nginx > /dev/null; then
-        echo "[SUCCESS] Nginx is running"
+        NGINX_RUNNING=true
+        echo "[SUCCESS] Nginx process is running"
     else
-        echo "[WARNING] Nginx is not running!"
-        echo "          Start it with: sudo nginx"
-        echo "          See nginx/README.md for setup instructions"
+        echo "[ERROR] Nginx is not running!"
+        echo "        Start it with: sudo nginx"
     fi
 fi
 
-# Check if port 80 is accessible
-if lsof -i:80 > /dev/null 2>&1; then
+# Check if port 80 is accessible (use curl instead of lsof which needs sudo)
+if curl -s --max-time 2 http://dev.axonerp.local/ > /dev/null 2>&1; then
+    NGINX_PORT_80=true
     echo "[SUCCESS] Port 80 is listening"
+    echo "[SUCCESS] Nginx proxy is responding"
+    
+    # Test if API proxy works
+    if curl -s --max-time 2 http://dev.axonerp.local/api/method/ping > /dev/null 2>&1; then
+        echo "[SUCCESS] API proxy is working (/api → backend)"
+    else
+        echo "[WARNING] API proxy may not be configured correctly"
+        echo "          Check: nginx/dev.conf location /api block"
+    fi
 else
-    echo "[WARNING] Port 80 is not listening!"
-    echo "          Nginx may not be configured correctly"
+    echo "[ERROR] Port 80 is not accessible!"
+    echo "        Nginx may not be configured or listening on port 80"
+    echo "        Check: sudo netstat -tlnp | grep :80"
+    echo "        Check: sudo nginx -t (test config)"
+fi
+
+# Critical check - abort if nginx is not working
+if [ "$NGINX_RUNNING" = false ] || [ "$NGINX_PORT_80" = false ]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "[CRITICAL] Nginx is not properly configured!"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "The application REQUIRES nginx to work properly."
+    echo "Without nginx:"
+    echo "  ❌ Frontend cannot communicate with backend"
+    echo "  ❌ API calls will fail with 404 errors"
+    echo "  ❌ Authentication will not work"
+    echo "  ❌ You will see console errors"
+    echo ""
+    echo "Setup instructions:"
+    echo "  1. See nginx/README.md for detailed setup"
+    echo "  2. sudo systemctl start nginx"
+    echo "  3. sudo systemctl enable nginx"
+    echo ""
+    echo "Do you want to continue anyway? (y/N)"
+    read -r -n 1 CONTINUE
+    echo ""
+    
+    if [[ ! $CONTINUE =~ ^[Yy]$ ]]; then
+        echo "[INFO] Startup cancelled. Please configure nginx first."
+        exit 1
+    fi
+    
+    echo "[WARNING] Continuing without nginx - expect errors!"
 fi
 
 echo ""
@@ -106,23 +155,59 @@ fi
 
 echo ""
 echo "================================"
-echo "[SUCCESS] Axon ERP Started Successfully!"
+
+# Display status summary
+if [ "$NGINX_RUNNING" = true ] && [ "$NGINX_PORT_80" = true ]; then
+    echo "[SUCCESS] Axon ERP Started Successfully!"
+    echo ""
+    echo "✅ All services are running correctly:"
+    echo "   - Nginx: Running on port 80"
+    echo "   - Backend: Running on port 8000"
+    echo "   - Frontend: Running on port 3000"
+    echo ""
+    echo "Access Application:"
+    echo "  👉 Main URL: http://dev.axonerp.local/"
+    echo "     (Recommended - through nginx proxy)"
+else
+    echo "[WARNING] Axon ERP Started with Issues!"
+    echo ""
+    echo "⚠️  Service Status:"
+    if [ "$NGINX_RUNNING" = true ]; then
+        echo "   ✅ Nginx: Running"
+    else
+        echo "   ❌ Nginx: NOT running"
+    fi
+    if [ "$NGINX_PORT_80" = true ]; then
+        echo "   ✅ Port 80: Listening"
+    else
+        echo "   ❌ Port 80: NOT listening"
+    fi
+    echo "   ✅ Backend: Running on port 8000"
+    echo "   ✅ Frontend: Running on port 3000"
+    echo ""
+    echo "⚠️  Without nginx, you MUST use direct URLs:"
+    echo "   Backend:  http://dev.axonerp.local:8000"
+    echo "   Frontend: http://dev.axonerp.local:3000"
+    echo ""
+    echo "   WARNING: Authentication and API calls may not work!"
+fi
+
 echo ""
-echo "Access Application:"
-echo "  Main URL: http://dev.axonerp.local/"
-echo "            (through nginx on port 80)"
-echo ""
-echo "Direct Service URLs (for debugging only):"
+echo "Direct Service URLs (for debugging):"
 echo "  Backend:  http://dev.axonerp.local:8000"
 echo "  Frontend: http://dev.axonerp.local:3000"
-echo ""
-echo "IMPORTANT: Always use http://dev.axonerp.local/ (port 80)"
-echo "           Do NOT access :3000 or :8000 directly"
 echo ""
 echo "View Logs:"
 echo "  Backend:  tail -f $SCRIPT_DIR/backend.log"
 echo "  Frontend: tail -f $SCRIPT_DIR/frontend.log"
-echo "  Nginx:    sudo tail -f /var/log/nginx/error.log"
+if [ "$NGINX_RUNNING" = true ]; then
+    echo "  Nginx:    sudo tail -f /var/log/nginx/error.log"
+fi
 echo ""
-echo "To stop services, run: ./stop.sh"
+echo "Commands:"
+echo "  Stop:     ./stop.sh"
+echo "  Status:   ./status.sh"
+if [ "$NGINX_RUNNING" = false ]; then
+    echo "  Fix Nginx: sudo systemctl start nginx"
+fi
 echo "================================"

@@ -90,15 +90,21 @@ export function useBoot() {
       try {
         const result = await call('axon_erp.api.get_boot')
         const boot = result.message || result
+        console.log('[useBoot] Boot data loaded successfully')
         return boot
       } catch (error) {
-        console.error('[useBoot] Error fetching boot info:', error)
-        // Don't throw - return empty boot to avoid breaking UI
-        return {
-          all_doctypes: [],
-          user: {},
-          modules: {}
+        // If not authenticated, return empty boot (expected behavior)
+        const status = (error as any)?.response?.status
+        if (status === 401 || status === 403) {
+          console.log('[useBoot] Not authenticated - returning empty boot')
+          return {
+            all_doctypes: [],
+            user: 'Guest',
+            modules: {}
+          }
         }
+        console.error('[useBoot] Unexpected error:', error)
+        throw error
       }
     },
     staleTime: 10 * 60 * 1000,  // Cache for 10 minutes

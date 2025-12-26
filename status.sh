@@ -164,10 +164,52 @@ fi
 
 echo ""
 echo "================================"
+
+# Calculate overall system status
+NGINX_OK=false
+BACKEND_OK=false
+FRONTEND_OK=false
+
+if systemctl is-active --quiet nginx 2>/dev/null || pgrep -x nginx > /dev/null; then
+    # Check if nginx is actually serving (better than lsof which needs sudo)
+    if curl -s http://dev.axonerp.local/ > /dev/null 2>&1; then
+        NGINX_OK=true
+    fi
+fi
+
+if pgrep -f "bench.*serve" > /dev/null; then
+    if curl -s http://dev.axonerp.local:8000/api/method/ping > /dev/null 2>&1; then
+        BACKEND_OK=true
+    fi
+fi
+
+if lsof -i:3000 > /dev/null 2>&1; then
+    FRONTEND_OK=true
+fi
+
 echo ""
-echo "Access Application:"
-echo "  Main URL: http://dev.axonerp.local/"
-echo "  (Always use port 80 through nginx)"
+if [ "$NGINX_OK" = true ] && [ "$BACKEND_OK" = true ] && [ "$FRONTEND_OK" = true ]; then
+    echo "✅ SYSTEM STATUS: FULLY OPERATIONAL"
+    echo ""
+    echo "Access Application:"
+    echo "  👉 http://dev.axonerp.local/"
+    echo "     (All services running correctly)"
+elif [ "$BACKEND_OK" = true ] && [ "$FRONTEND_OK" = true ] && [ "$NGINX_OK" = false ]; then
+    echo "⚠️  SYSTEM STATUS: DEGRADED (Nginx not running)"
+    echo ""
+    echo "Services running but nginx is required for proper operation!"
+    echo ""
+    echo "Fix: sudo systemctl start nginx"
+    echo ""
+    echo "Temporary access (with limited functionality):"
+    echo "  Backend:  http://dev.axonerp.local:8000"
+    echo "  Frontend: http://dev.axonerp.local:3000"
+else
+    echo "❌ SYSTEM STATUS: NOT OPERATIONAL"
+    echo ""
+    echo "Some services are not running. Run ./start.sh to start them."
+fi
+
 echo ""
 echo "Commands:"
 echo "  ./start.sh    - Start all services"

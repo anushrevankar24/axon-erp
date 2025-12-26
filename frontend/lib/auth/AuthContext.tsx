@@ -1,0 +1,114 @@
+'use client'
+
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { call } from '@/lib/api/client'
+import { useBoot } from '@/lib/api/hooks'
+
+interface AuthContextType {
+  user: any | null
+  isLoading: boolean
+  isAuthenticated: boolean
+  logout: () => Promise<void>
+  checkAuth: () => Promise<boolean>
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+/**
+ * AuthProvider - Manages authentication state
+ * 
+ * Uses useBoot() which calls axon_erp.api.get_boot()
+ * This wraps frappe.sessions.get() - same data ERPNext frontend gets
+ * 
+ * Pattern from: frappe/desk.js Application.load_bootinfo()
+ */
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
+  const { data: boot, isLoading, error } = useBoot()
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  
+  // Handle boot data - determine if user is authenticated
+  useEffect(() => {
+    if (error) {
+      const status = (error as any)?.response?.status
+      // Session expired or unauthorized
+      if (status === 401 || status === 403) {
+        setIsAuthenticated(false)
+        // Middleware will catch this, but redirect just in case
+        router.push('/login')
+      }
+    }
+    
+    // User is authenticated if boot has user and not Guest
+    if (boot?.user && boot.user !== 'Guest') {
+      setIsAuthenticated(true)
+    } else if (boot?.user === 'Guest') {
+      setIsAuthenticated(false)
+    }
+  }, [boot, error, router])
+  
+  /**
+   * Logout - Call Frappe's logout API
+   * Pattern from: frappe/desk.js (logout button)
+   */
+  const logout = useCallback(async () => {
+    try {
+      // Call Frappe's built-in logout method
+      await call('logout')
+    } catch (err) {
+      console.error('[Auth] Logout error:', err)
+      // Continue anyway - clear client state
+    } finally {
+      // Clear authentication state
+      setIsAuthenticated(false)
+      
+      // Clear CSRF token
+      document.cookie = 'csrf_token=; Max-Age=0; path=/'
+      
+      // Redirect to login (full page reload to clear all state)
+      window.location.href = '/login'
+    }
+  }, [])
+  
+  /**
+   * Check Auth - Verify session is still valid
+   * Pattern from: frappe.auth.get_logged_user
+   */
+  const checkAuth = useCallback(async (): Promise<boolean> => {
+    try {
+      const result = await call('frappe.auth.get_logged_user')
+      const user = result.message
+      const isAuth = user && user !== 'Guest'
+      setIsAuthenticated(isAuth)
+      return isAuth
+    } catch {
+      setIsAuthenticated(false)
+      return false
+    }
+  }, [])
+  
+  return (
+    <AuthContext.Provider value={{
+      user: boot?.user || null,
+      isLoading,
+      isAuthenticated,
+      logout,
+      checkAuth
+    }}>
+      {children}
+    </AuthContext.Provider>
+  )
+}
+
+/**
+ * useAuth Hook - Access auth context in components
+ */
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider')
+  }
+  return context
+}
+

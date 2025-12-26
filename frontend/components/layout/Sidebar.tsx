@@ -2,18 +2,17 @@
 
 import * as React from 'react'
 import { useDocTypesByModule } from '@/lib/api/hooks'
+import { useAuth } from '@/lib/auth/AuthContext'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Home, Settings, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { auth } from '@/lib/api/client'
-import { toast } from 'sonner'
 
 export const Sidebar = React.memo(function Sidebar() {
   const { data: doctypesByModule, isLoading, error } = useDocTypesByModule()
+  const { logout } = useAuth()
   const pathname = usePathname()
-  const router = useRouter()
   
   // Only log errors
   React.useEffect(() => {
@@ -21,35 +20,6 @@ export const Sidebar = React.memo(function Sidebar() {
       console.error('[Sidebar] Error loading DocTypes:', error)
     }
   }, [error])
-  
-  const handleLogout = async () => {
-    try {
-      // Frappe logout endpoint
-      const response = await fetch(`${window.location.protocol}//${window.location.hostname}:8000/api/method/logout`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
-      })
-      
-      if (response.ok || response.status === 403) {
-        // 403 is also OK - means already logged out
-        toast.success('Logged out successfully')
-        router.push('/login')
-        // Reload to clear any cached data
-        window.location.href = '/login'
-      } else {
-        throw new Error(`Logout failed: ${response.status}`)
-      }
-    } catch (error: any) {
-      console.error('[Sidebar] Logout error:', error.message)
-      // Even if logout fails, redirect to login
-      toast.info('Session cleared')
-      window.location.href = '/login'
-    }
-  }
   
   if (isLoading) {
     return (
@@ -130,7 +100,7 @@ export const Sidebar = React.memo(function Sidebar() {
         <Button 
           variant="ghost" 
           className="w-full justify-start text-muted-foreground"
-          onClick={handleLogout}
+          onClick={logout}
         >
           <LogOut className="w-4 h-4 mr-2" />
           Logout

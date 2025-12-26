@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { auth } from '@/lib/api/client'
 import { Button } from '@/components/ui/button'
@@ -10,9 +10,14 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const queryClient = useQueryClient()
+  
+  // Get redirect parameter from URL (ERPNext pattern: ?redirect=/some/path)
+  const redirectTo = searchParams.get('redirect') || '/dashboard'
+  
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -57,13 +62,19 @@ export default function LoginPage() {
       
       toast.success('Login successful!')
       
-      // Invalidate boot query to trigger fetch now that user is logged in
-      queryClient.invalidateQueries({ queryKey: ['boot'] })
+      console.log('[Login] Invalidating boot query to trigger refetch...')
       
-      // Small delay to ensure CSRF token is set before navigation
-      setTimeout(() => {
-        router.push('/')
-      }, 100)
+      // Invalidate and refetch boot query
+      await queryClient.invalidateQueries({ queryKey: ['boot'] })
+      await queryClient.refetchQueries({ queryKey: ['boot'] })
+      
+      console.log('[Login] Boot query refetched, navigating to:', redirectTo)
+      
+      // Small delay to ensure boot data is loaded
+      await new Promise(resolve => setTimeout(resolve, 300))
+      
+      // Navigate to redirect URL (or dashboard if no redirect)
+      router.push(redirectTo)
     } catch (error: any) {
       console.error('[Login] Login failed:', error)
       toast.error(error.message || 'Invalid credentials')
@@ -116,6 +127,22 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <Card className="w-full max-w-md shadow-lg">
+          <CardContent className="p-6">
+            <div className="text-center">Loading...</div>
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   )
 }
 
