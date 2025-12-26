@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Axon ERP - Start Script
-# Starts both backend (ERPNext) and frontend (Next.js)
+# Starts backend (ERPNext), frontend (Next.js), and verifies nginx
 
 echo "Starting Axon ERP..."
 echo "================================"
@@ -10,6 +10,41 @@ echo "================================"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 BACKEND_DIR="$SCRIPT_DIR/backend/frappe-bench"
 FRONTEND_DIR="$SCRIPT_DIR/frontend"
+
+# Check nginx status
+echo "[INFO] Checking Nginx status..."
+if command -v systemctl &> /dev/null; then
+    # Linux with systemd
+    if systemctl is-active --quiet nginx; then
+        echo "[SUCCESS] Nginx is running"
+    else
+        echo "[WARNING] Nginx is not running!"
+        echo "          Start it with: sudo systemctl start nginx"
+        echo "          See nginx/README.md for setup instructions"
+    fi
+elif command -v brew &> /dev/null && brew services list | grep -q "nginx.*started"; then
+    # macOS with Homebrew
+    echo "[SUCCESS] Nginx is running"
+else
+    # Check if nginx process exists
+    if pgrep -x nginx > /dev/null; then
+        echo "[SUCCESS] Nginx is running"
+    else
+        echo "[WARNING] Nginx is not running!"
+        echo "          Start it with: sudo nginx"
+        echo "          See nginx/README.md for setup instructions"
+    fi
+fi
+
+# Check if port 80 is accessible
+if lsof -i:80 > /dev/null 2>&1; then
+    echo "[SUCCESS] Port 80 is listening"
+else
+    echo "[WARNING] Port 80 is not listening!"
+    echo "          Nginx may not be configured correctly"
+fi
+
+echo ""
 
 # Check if backend is already running
 if pgrep -f "bench.*serve" > /dev/null; then
@@ -21,7 +56,7 @@ else
     nohup bench start > "$SCRIPT_DIR/backend.log" 2>&1 &
     BACKEND_PID=$!
     echo "[SUCCESS] Backend started (PID: $BACKEND_PID)"
-    echo "          URL: http://dev.axonerp.local:8000"
+    echo "          Direct URL: http://dev.axonerp.local:8000"
     echo "          Logs: $SCRIPT_DIR/backend.log"
 fi
 
@@ -65,7 +100,7 @@ else
     nohup npm run dev > "$SCRIPT_DIR/frontend.log" 2>&1 &
     FRONTEND_PID=$!
     echo "[SUCCESS] Frontend started (PID: $FRONTEND_PID)"
-    echo "          URL: http://dev.axonerp.local:3000"
+    echo "          Direct URL: http://dev.axonerp.local:3000"
     echo "          Logs: $SCRIPT_DIR/frontend.log"
 fi
 
@@ -73,13 +108,21 @@ echo ""
 echo "================================"
 echo "[SUCCESS] Axon ERP Started Successfully!"
 echo ""
-echo "Access Points:"
+echo "Access Application:"
+echo "  Main URL: http://dev.axonerp.local/"
+echo "            (through nginx on port 80)"
+echo ""
+echo "Direct Service URLs (for debugging only):"
 echo "  Backend:  http://dev.axonerp.local:8000"
 echo "  Frontend: http://dev.axonerp.local:3000"
+echo ""
+echo "IMPORTANT: Always use http://dev.axonerp.local/ (port 80)"
+echo "           Do NOT access :3000 or :8000 directly"
 echo ""
 echo "View Logs:"
 echo "  Backend:  tail -f $SCRIPT_DIR/backend.log"
 echo "  Frontend: tail -f $SCRIPT_DIR/frontend.log"
+echo "  Nginx:    sudo tail -f /var/log/nginx/error.log"
 echo ""
 echo "To stop services, run: ./stop.sh"
 echo "================================"

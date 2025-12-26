@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { auth } from '@/lib/api/client'
-import { getBackendURL } from '@/lib/api/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
@@ -33,8 +32,7 @@ export default function LoginPage() {
       
       // Fetch CSRF token after login
       try {
-        const backendURL = getBackendURL()
-        const response = await fetch(`${backendURL}/api/method/axon_erp.api.get_csrf_token`, {
+        const response = await fetch('/api/method/axon_erp.api.get_csrf_token', {
           method: 'POST',
           credentials: 'include',
           headers: {

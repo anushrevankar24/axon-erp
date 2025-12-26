@@ -1,16 +1,24 @@
 import { FrappeApp } from 'frappe-js-sdk'
 import { getBackendURL } from './utils'
 
-// Configure Frappe SDK with credentials support
+/**
+ * Frappe SDK Configuration
+ * 
+ * Architecture:
+ * - Empty string for baseURL = same-origin requests
+ * - All API calls use relative URLs (/api/method/...)
+ * - Nginx proxies /api/* to backend (ERPNext on port 8000)
+ * - No CORS issues, no environment variables needed
+ */
 export const frappe = new FrappeApp(
-  getBackendURL(),  // Dynamic URL detection based on hostname
+  getBackendURL(),  // Returns empty string for relative URLs
   {
     useToken: false,
     type: 'browser'
   }
 )
 
-// Enable credentials for cross-origin requests
+// Enable credentials for cookie-based authentication
 if (frappe.axios) {
   frappe.axios.defaults.withCredentials = true
   
@@ -107,4 +115,3 @@ export const auth = frappe.auth()
 export const call = async (method: string, params?: any) => {
   return frappeCall.post(method, params)
 }
-

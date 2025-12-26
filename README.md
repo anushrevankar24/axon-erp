@@ -17,29 +17,41 @@ A modern, full-stack ERP system built on **ERPNext** with a custom **Next.js** f
 ## Architecture
 
 ```
+User Request
+    │
+    ▼
 ┌─────────────────────────────────────┐
-│  Next.js Frontend (Port 3000)      │
-│  - Modern React UI                  │
-│  - shadcn/ui + Tailwind CSS        │
-│  - Dynamic DocType Views            │
-│  - Real-time Dashboard              │
-└──────────────┬──────────────────────┘
-               │ HTTP/REST API
-               │ frappe-js-sdk
-┌──────────────▼──────────────────────┐
-│  ERPNext Backend (Port 8000)        │
-│  - Frappe Framework                 │
-│  - Custom axon_erp App              │
-│  - RESTful APIs                     │
-│  - Business Logic Layer             │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│  MariaDB Database (Port 3307)       │
-│  - Multi-site Architecture          │
-│  - Customer Data Isolation          │
-└─────────────────────────────────────┘
+│  Nginx Reverse Proxy (Port 80)     │
+│  - Routes by path                   │
+│  - / → Frontend                     │
+│  - /api/* → Backend                 │
+│  - Preserves Host header            │
+└──────────┬──────────────────────────┘
+           │
+    ┌──────┴──────┐
+    │             │
+    ▼             ▼
+┌──────────┐  ┌──────────────────────┐
+│ Frontend │  │  Backend (ERPNext)   │
+│ Port 3000│  │  Port 8000           │
+│          │  │  - Resolves tenant   │
+│ Next.js  │  │    from Host header  │
+│ React UI │  │  - Custom axon_erp   │
+└──────────┘  └──────────┬───────────┘
+                         │
+              ┌──────────▼───────────┐
+              │  MariaDB (Port 3307) │
+              │  - Multi-tenant DBs  │
+              │  - Site isolation    │
+              └──────────────────────┘
 ```
+
+**Key Principles:**
+- **Same-origin requests**: Frontend and backend share the same domain through nginx
+- **No CORS**: All requests go through nginx on the same domain
+- **No environment variables**: Configuration is fully dynamic
+- **ERPNext multi-tenancy**: Backend resolves customer/site from Host header
+- **Production parity**: Local development mirrors production exactly
 
 ## Tech Stack
 
@@ -69,6 +81,7 @@ A modern, full-stack ERP system built on **ERPNext** with a custom **Next.js** f
 - **Python** 3.10+
 - **MariaDB** 10.6+
 - **Redis** 6.0+
+- **Nginx** (reverse proxy)
 - **Git**
 
 ### Installation
@@ -100,20 +113,32 @@ bench --site dev.axonerp.local install-app axon_erp
 echo "127.0.0.1 dev.axonerp.local" | sudo tee -a /etc/hosts
 ```
 
-3. **Set up the frontend**
+3. **Set up Nginx (reverse proxy)**
+
+Nginx routes traffic to frontend and backend services on the same domain, eliminating CORS issues and enabling ERPNext's multi-tenant functionality.
+
+```bash
+# Ubuntu/Debian
+sudo apt install nginx
+sudo cp nginx/dev.conf /etc/nginx/sites-available/axon-erp-dev
+sudo ln -s /etc/nginx/sites-available/axon-erp-dev /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+
+# macOS
+brew install nginx
+sudo cp nginx/dev.conf /usr/local/etc/nginx/servers/axon-erp-dev.conf
+sudo nginx -t
+sudo brew services restart nginx
+```
+
+See [nginx/README.md](nginx/README.md) for detailed setup instructions.
+
+4. **Set up the frontend**
 
 ```bash
 cd frontend
 npm install
-```
-
-4. **Configure environment variables**
-
-For development, create `frontend/.env.local`:
-```bash
-NEXT_PUBLIC_ERPNEXT_URL=http://dev.axonerp.local:8000
-NEXT_PUBLIC_SITE_NAME=dev.axonerp.local
-NODE_ENV=development
 ```
 
 5. **Start the services**
@@ -137,9 +162,11 @@ npm run dev
 
 6. **Access the application**
 
-- **Frontend**: http://localhost:3000
-- **Backend Admin**: http://dev.axonerp.local:8000
+- **Application**: http://dev.axonerp.local/ (through nginx, port 80)
+- **Backend Admin** (if needed): http://dev.axonerp.local:8000
 - **Default Credentials**: `Administrator` / `admin`
+
+**Important:** Always access via `http://dev.axonerp.local/` (port 80 through nginx), NOT `localhost:3000` or `dev.axonerp.local:3000`. The nginx reverse proxy routes requests to the appropriate service.
 
 ## Development
 
@@ -219,46 +246,56 @@ npx shadcn@latest add date-picker
 ## Multi-tenant Deployment
 
 This system is designed for multi-tenant deployments where each customer has their own:
-- Domain name (e.g., `customer1.axonerp.com`, `customer2.axonerp.com`)
-- ERPNext site (isolated data)
-- Branded frontend experience
+- Domain name (e.g., `customer1.erp.com`, `customer2.erp.com`)
+- ERPNext site (isolated database)
+- Automatic tenant resolution
 
-### Dynamic Routing
-The frontend automatically detects the backend URL based on the current hostname:
+### Key Features
 
-- **Development**: `protocol://hostname:8000`
-- **Production**: `protocol://hostname` (Nginx proxies to backend)
+1. **Wildcard DNS**: `*.erp.com` → Single server IP
+2. **Wildcard Nginx**: One config handles all customer domains
+3. **ERPNext Multi-tenancy**: Resolves tenant from Host header
+4. **Zero Configuration**: Add customers without touching nginx
 
-No hardcoded URLs - each customer's frontend connects to their own backend automatically.
+### Adding New Customers
 
-### Production Deployment with Nginx
+No configuration changes needed! Simply create a new site:
+
+```bash
+cd /home/frappe/frappe-bench
+bench new-site customer999.erp.com \
+  --admin-password secure123 \
+  --install-app erpnext \
+  --install-app axon_erp
+```
+
+Site is immediately accessible at `https://customer999.erp.com` - the wildcard nginx config and ERPNext handle everything automatically.
+
+### Production Nginx Configuration
+
+Use the wildcard configuration from [nginx/production.conf](nginx/production.conf):
 
 ```nginx
-# Example Nginx configuration for customer1.axonerp.com
 server {
-    listen 80;
-    server_name customer1.axonerp.com;
+    listen 443 ssl http2;
+    server_name *.erp.com;  # Wildcard - handles ALL customers
+    
+    ssl_certificate /etc/ssl/certs/wildcard.erp.com.crt;
+    ssl_certificate_key /etc/ssl/private/wildcard.erp.com.key;
 
-    # Frontend (Next.js)
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
     }
 
-    # Backend API (ERPNext)
     location /api {
-        proxy_pass http://localhost:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Frappe-Site-Name customer1.axonerp.com;
-    }
-
-    # Backend assets
-    location /assets {
-        proxy_pass http://localhost:8000;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;  # ERPNext uses this!
     }
 }
 ```
+
+**One config. All customers. Forever.**
 
 ## Available Scripts
 
@@ -267,8 +304,39 @@ server {
 - `./restart.sh` - Restart all services
 - `./status.sh` - Check service status
 
+## Troubleshooting
+
+### Nginx Issues
+
+**502 Bad Gateway**
+- Check if frontend is running: `lsof -i :3000`
+- Check if backend is running: `lsof -i :8000`
+- Check nginx error log: `sudo tail -f /var/log/nginx/error.log`
+
+**Cannot access dev.axonerp.local**
+- Verify /etc/hosts: `cat /etc/hosts | grep axonerp`
+- Ping the domain: `ping dev.axonerp.local` (should resolve to 127.0.0.1)
+- Check nginx status: `sudo systemctl status nginx`
+
+**Port 80 already in use**
+- Check what's using it: `sudo lsof -i :80`
+- Stop conflicting service or change nginx port
+
+### API Errors
+
+**CORS errors**
+- Make sure you're accessing via `http://dev.axonerp.local/` (port 80)
+- NOT via `localhost:3000` or `dev.axonerp.local:3000`
+- Nginx eliminates CORS by serving everything on same domain
+
+**Authentication failures**
+- Clear browser cookies
+- Restart backend: `cd backend/frappe-bench && bench restart`
+- Check backend logs: `tail -f backend/frappe-bench/logs/bench.log`
+
 ## Documentation
 
+- [Nginx Setup Guide](./nginx/README.md) - Reverse proxy configuration
 - [Quick Start Guide](./QUICK_START.md) - Detailed setup and first steps
 - [Frappe Framework Docs](https://frappeframework.com/docs)
 - [ERPNext Documentation](https://docs.erpnext.com)
