@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useCreateSite } from '@/lib/api/hooks'
+// import { useCreateSite } from '@/lib/api/hooks' // TODO: Implement this hook
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
@@ -27,7 +27,7 @@ type SignupFormData = z.infer<typeof signupSchema>
 
 export default function SignupPage() {
   const router = useRouter()
-  const createSite = useCreateSite()
+  // const createSite = useCreateSite() // TODO: Implement this hook
   const [isLoading, setIsLoading] = useState(false)
   
   const form = useForm<SignupFormData>({
@@ -44,23 +44,27 @@ export default function SignupPage() {
     setIsLoading(true)
     
     try {
-      const result = await createSite.mutateAsync({
-        company_name: data.company_name,
-        email: data.email,
-        password: data.password
-      })
+      // TODO: Implement site creation with useCreateSite hook
+      toast.error('Signup is not yet implemented. Please contact your administrator.')
+      console.log('Signup data:', data)
       
-      if (result.success) {
-        toast.success('Account created successfully! Site is being provisioned...')
-        toast.info('This may take 2-3 minutes. You will be redirected automatically.')
-        
-        // Poll for site readiness, then redirect to setup wizard
-        setTimeout(() => {
-          window.location.href = result.url + '/setup'
-        }, 3000)
-      } else {
-        toast.error(result.error || 'Failed to create account')
-      }
+      // const result = await createSite.mutateAsync({
+      //   company_name: data.company_name,
+      //   email: data.email,
+      //   password: data.password
+      // })
+      
+      // if (result.success) {
+      //   toast.success('Account created successfully! Site is being provisioned...')
+      //   toast.info('This may take 2-3 minutes. You will be redirected automatically.')
+      //   
+      //   // Poll for site readiness, then redirect to setup wizard
+      //   setTimeout(() => {
+      //     window.location.href = result.url + '/setup'
+      //   }, 3000)
+      // } else {
+      //   toast.error(result.error || 'Failed to create account')
+      // }
     } catch (error: any) {
       console.error('Signup error:', error)
       toast.error(error.message || 'An error occurred during signup')

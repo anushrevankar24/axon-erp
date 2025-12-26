@@ -10,7 +10,7 @@ export function Breadcrumbs() {
   // Parse pathname to create breadcrumb items
   const getBreadcrumbs = () => {
     const segments = pathname.split('/').filter(Boolean)
-    const items = [{ label: 'Home', href: '/dashboard' }]
+    const items: Array<{ label: string; href: string; isLast?: boolean }> = [{ label: 'Home', href: '/dashboard' }]
     
     // Skip 'app' segment if present
     const relevantSegments = segments[0] === 'app' ? segments.slice(1) : segments

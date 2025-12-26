@@ -14,7 +14,8 @@ import {
   Mail,
   Edit,
   Trash2,
-  Clock
+  Clock,
+  MoreHorizontal
 } from "lucide-react"
 import { getTimeline, addComment } from "@/lib/api/dashboard"
 import { formatDistanceToNow } from "date-fns"
