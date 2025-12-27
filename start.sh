@@ -145,8 +145,16 @@ if lsof -i:3000 > /dev/null 2>&1; then
 else
     echo ""
     echo "[INFO] Starting Frontend (Next.js)..."
+    
+    # Clean up any stale lock files
+    if [ -f "$FRONTEND_DIR/.next/dev/lock" ]; then
+        echo "[INFO] Removing stale Next.js lock file..."
+        rm -f "$FRONTEND_DIR/.next/dev/lock"
+    fi
+    
     cd "$FRONTEND_DIR"
-    nohup npm run dev > "$SCRIPT_DIR/frontend.log" 2>&1 &
+    # Use script to strip ANSI codes and properly log
+    nohup npm run dev 2>&1 | sed -u 's/\x1b\[[0-9;]*m//g' > "$SCRIPT_DIR/frontend.log" &
     FRONTEND_PID=$!
     echo "[SUCCESS] Frontend started (PID: $FRONTEND_PID)"
     echo "          Direct URL: http://dev.axonerp.local:3000"

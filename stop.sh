@@ -27,12 +27,27 @@ fi
 # Stop frontend
 echo ""
 echo "[INFO] Stopping Frontend (Next.js)..."
-if lsof -i:3000 > /dev/null 2>&1; then
-    PID=$(lsof -t -i:3000)
-    kill $PID 2>/dev/null
+
+# Kill all Next.js processes
+if pgrep -f "next dev" > /dev/null; then
+    pkill -f "next dev"
     echo "[SUCCESS] Frontend stopped"
 else
     echo "[WARNING] Frontend was not running"
+fi
+
+# Also kill any process on port 3000
+if lsof -i:3000 > /dev/null 2>&1; then
+    PID=$(lsof -t -i:3000)
+    kill $PID 2>/dev/null
+    echo "[INFO] Killed process on port 3000"
+fi
+
+# Clean up lock files
+FRONTEND_DIR="$SCRIPT_DIR/frontend"
+if [ -f "$FRONTEND_DIR/.next/dev/lock" ]; then
+    rm -f "$FRONTEND_DIR/.next/dev/lock"
+    echo "[INFO] Cleaned up Next.js lock file"
 fi
 
 echo ""
