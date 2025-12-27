@@ -5,6 +5,7 @@ import { Bell, User, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SearchBar } from './SearchBar'
 import { Breadcrumbs } from './Breadcrumbs'
+import { MobileSidebar } from './WorkspaceSidebar'
 import { useAuth } from '@/lib/auth/AuthContext'
 import {
   DropdownMenu,
@@ -19,17 +20,22 @@ export function UnifiedHeader() {
   return (
     <header className="h-14 border-b bg-white sticky top-0 z-50">
       <div className="flex items-center justify-between px-6 h-full max-w-full">
-        {/* LEFT: Logo + Breadcrumbs */}
+        {/* LEFT: Mobile Menu + Logo + Breadcrumbs */}
         <div className="flex items-center gap-4 flex-1 min-w-0">
+          {/* Mobile Menu Button */}
+          <MobileSidebar />
+          
           {/* Company Logo */}
-          <Link href="/dashboard" className="flex-shrink-0">
+          <Link href="/app/home" className="flex-shrink-0">
             <div className="h-8 w-8 bg-primary rounded flex items-center justify-center">
               <span className="text-white text-sm font-bold">A</span>
             </div>
           </Link>
           
-          {/* Dynamic Breadcrumbs */}
-          <Breadcrumbs />
+          {/* Dynamic Breadcrumbs - hidden on mobile */}
+          <div className="hidden md:block">
+            <Breadcrumbs />
+          </div>
         </div>
         
         {/* RIGHT: Search + Notifications + User */}

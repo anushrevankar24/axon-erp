@@ -1,19 +1,10 @@
-import { redirect } from 'next/navigation'
-
-export default function LegacyDashboardPage() {
-  // Redirect to ERPNext-style home
-  redirect('/app/home')
-}
-
-/*
-// Legacy dashboard content - now at /app/home
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDocList } from '@/lib/api/hooks'
 import { TrendingUp, Users, ShoppingCart, Package } from 'lucide-react'
 
-export default function DashboardPage() {
+export default function HomePage() {
   const { data: salesInvoices } = useDocList('Sales Invoice', { docstatus: 1 })
   const { data: customers } = useDocList('Customer')
   const { data: items } = useDocList('Item')
@@ -53,7 +44,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <h1 className="text-3xl font-bold">Home</h1>
         <p className="text-muted-foreground">Welcome to Axon ERP</p>
       </div>
       

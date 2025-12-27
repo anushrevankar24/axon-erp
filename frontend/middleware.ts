@@ -28,6 +28,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
   
+  // Redirect legacy /dashboard to /app/home (ERPNext pattern)
+  if (pathname === '/dashboard') {
+    return NextResponse.redirect(new URL('/app/home', request.url))
+  }
+  
   // NOTE: We don't redirect authenticated users away from login page
   // because the session cookie might be expired. Let the client-side
   // AuthProvider handle that after checking with the server.
