@@ -5,10 +5,11 @@ import { useForm } from 'react-hook-form'
 import { useRouter } from 'next/navigation'
 import { useMeta, useDoc } from '@/lib/api/hooks'
 import { db } from '@/lib/api/client'
-import { FieldRenderer } from './FieldRenderer'
+import { FormLayoutRenderer } from './FormLayoutRenderer'
 import { Form } from '@/components/ui/form'
-import { Card, CardContent } from '@/components/ui/card'
+import { FormSkeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
+import { parseFrappeError } from '@/lib/utils/errors'
 
 interface DynamicFormProps {
   doctype: string
@@ -62,21 +63,16 @@ export function DynamicForm({ doctype, id, onFormReady, onDirtyChange }: Dynamic
       }
     } catch (error: any) {
       console.error('Save error:', error)
-      // Extract meaningful error message from Frappe SDK response
-      const errorMessage = error.exception || error._server_messages || error.message || 'Operation failed'
-      toast.error(errorMessage)
+      // Parse error using ERPNext pattern
+      const errorMessage = parseFrappeError(error)
+      toast.error(errorMessage, {
+        duration: 5000, // Show longer for user to read
+      })
     }
   }
   
   if (metaLoading || (id && docLoading)) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    )
+    return <FormSkeleton />
   }
   
   if (!meta) {
@@ -84,25 +80,13 @@ export function DynamicForm({ doctype, id, onFormReady, onDirtyChange }: Dynamic
   }
   
   return (
-    <Card>
-      <CardContent className="p-6">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {meta.fields?.map((field: any) => (
-                !field.hidden && field.fieldtype !== 'Section Break' && field.fieldtype !== 'Column Break' && (
-                  <FieldRenderer 
-                    key={field.fieldname}
-                    field={field}
-                    form={form}
-                  />
-                )
-              ))}
-            </div>
-          </form>
-        </Form>
-      </CardContent>
-    </Card>
+    <div className="animate-in fade-in-50 duration-300">
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
+          <FormLayoutRenderer fields={meta.fields || []} form={form} />
+        </form>
+      </Form>
+    </div>
   )
 }
 

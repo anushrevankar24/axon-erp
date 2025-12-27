@@ -10,19 +10,38 @@ export function FieldRenderer({ field, form }: any) {
   const fieldName = field.fieldname
   
   // Skip hidden fields and breaks
-  if (field.hidden || ['Section Break', 'Column Break', 'HTML'].includes(field.fieldtype)) {
+  if (field.hidden || ['Section Break', 'Column Break', 'HTML', 'Tab Break'].includes(field.fieldtype)) {
     return null
   }
   
-  const isFullWidth = ['Text', 'Small Text', 'Long Text', 'Text Editor', 'Table'].includes(field.fieldtype)
+  // Special handling for checkbox - no label wrapper
+  if (field.fieldtype === 'Check') {
+    return (
+      <FormField
+        control={form.control}
+        name={fieldName}
+        render={({ field: formField }) => (
+          <FormItem>
+            <FormControl>
+              {renderFieldInput(field, formField, form)}
+            </FormControl>
+            {field.description && (
+              <p className="text-[11px] text-gray-500 mt-0.5">{field.description}</p>
+            )}
+            <FormMessage className="text-xs" />
+          </FormItem>
+        )}
+      />
+    )
+  }
   
   return (
     <FormField
       control={form.control}
       name={fieldName}
       render={({ field: formField }) => (
-        <FormItem className={isFullWidth ? 'md:col-span-2' : ''}>
-          <FormLabel className="text-sm font-medium">
+        <FormItem>
+          <FormLabel className="text-xs font-medium text-gray-600">
             {field.label}
             {field.reqd === 1 && <span className="text-red-500 ml-1">*</span>}
           </FormLabel>
@@ -30,7 +49,7 @@ export function FieldRenderer({ field, form }: any) {
             {renderFieldInput(field, formField, form)}
           </FormControl>
           {field.description && (
-            <p className="text-xs text-muted-foreground mt-1">{field.description}</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">{field.description}</p>
           )}
           <FormMessage className="text-xs" />
         </FormItem>
@@ -45,14 +64,14 @@ function renderFieldInput(field: any, formField: any, form?: any) {
     case 'Barcode':
     case 'Phone':
     case 'Password':
-      return <Input type={field.fieldtype === 'Password' ? 'password' : 'text'} className="h-9 text-sm" {...formField} value={formField.value || ''} />
+      return <Input type={field.fieldtype === 'Password' ? 'password' : 'text'} className="h-8 text-sm" {...formField} value={formField.value || ''} />
     
     case 'Int':
-      return <Input type="number" step="1" className="h-9 text-sm" {...formField} value={formField.value || ''} />
+      return <Input type="number" step="1" className="h-8 text-sm" {...formField} value={formField.value || ''} />
     
     case 'Float':
     case 'Percent':
-      return <Input type="number" step="0.01" className="h-9 text-sm" {...formField} value={formField.value || ''} />
+      return <Input type="number" step="0.01" className="h-8 text-sm" {...formField} value={formField.value || ''} />
     
     case 'Currency':
       return (
@@ -60,7 +79,7 @@ function renderFieldInput(field: any, formField: any, form?: any) {
           <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">
             $
           </span>
-          <Input type="number" step="0.01" className="pl-8 h-9 text-sm" {...formField} value={formField.value || ''} />
+          <Input type="number" step="0.01" className="pl-8 h-8 text-sm" {...formField} value={formField.value || ''} />
         </div>
       )
     
@@ -70,17 +89,17 @@ function renderFieldInput(field: any, formField: any, form?: any) {
       return <Textarea rows={field.fieldtype === 'Long Text' ? 6 : 3} className="text-sm resize-none" {...formField} value={formField.value || ''} />
     
     case 'Date':
-      return <Input type="date" className="h-9 text-sm" {...formField} value={formField.value || ''} />
+      return <Input type="date" className="h-8 text-sm" {...formField} value={formField.value || ''} />
     
     case 'Datetime':
-      return <Input type="datetime-local" className="h-9 text-sm" {...formField} value={formField.value || ''} />
+      return <Input type="datetime-local" className="h-8 text-sm" {...formField} value={formField.value || ''} />
     
     case 'Time':
-      return <Input type="time" className="h-9 text-sm" {...formField} value={formField.value || ''} />
+      return <Input type="time" className="h-8 text-sm" {...formField} value={formField.value || ''} />
     
     case 'Check':
       return (
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 pt-2">
           <Checkbox
             checked={formField.value === 1 || formField.value === true}
             onCheckedChange={(checked) => formField.onChange(checked ? 1 : 0)}
@@ -88,6 +107,7 @@ function renderFieldInput(field: any, formField: any, form?: any) {
           />
           <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
             {field.label}
+            {field.reqd === 1 && <span className="text-red-500 ml-1">*</span>}
           </label>
         </div>
       )
@@ -98,7 +118,7 @@ function renderFieldInput(field: any, formField: any, form?: any) {
       
       return (
         <Select value={formField.value || ''} onValueChange={formField.onChange}>
-          <SelectTrigger className="h-9 text-sm">
+          <SelectTrigger className="h-8 text-sm">
             <SelectValue placeholder={`Select ${field.label}`} />
           </SelectTrigger>
           <SelectContent>
@@ -151,11 +171,11 @@ function renderFieldInput(field: any, formField: any, form?: any) {
     
     case 'Read Only':
       return (
-        <Input {...formField} value={formField.value || ''} disabled className="bg-gray-50 h-9 text-sm" />
+        <Input {...formField} value={formField.value || ''} disabled className="bg-gray-50 h-8 text-sm" />
       )
     
     default:
-      return <Input {...formField} value={formField.value || ''} placeholder={field.fieldtype} className="h-9 text-sm" />
+      return <Input {...formField} value={formField.value || ''} placeholder={field.fieldtype} className="h-8 text-sm" />
   }
 }
 

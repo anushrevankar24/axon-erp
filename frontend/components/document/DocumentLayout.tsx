@@ -63,7 +63,7 @@ export function DocumentLayout({ doctype, id }: DocumentLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Document Title Bar - Like ERPNext */}
       <div className="border-b bg-white px-4 py-3 flex items-center justify-between">
         {/* Left: Hamburger + Document Name */}

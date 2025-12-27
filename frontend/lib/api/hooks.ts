@@ -8,34 +8,28 @@ export function useMeta(doctype: string) {
   return useQuery({
     queryKey: ['meta', doctype],
     queryFn: async () => {
-      try {
-        const result = await call('frappe.desk.form.load.getdoctype', { doctype })
-        
-        // The response structure is: {docs: [{...doctype_meta}], user_settings: '{}'}
-        // OR with message wrapper: {message: {docs: [...], ...}}
-        let metadata = null
-        
-        if (result.message) {
-          // Wrapped in message
-          metadata = result.message.docs?.[0] || result.message
-        } else if (result.docs) {
-          // Direct docs array
-          metadata = result.docs[0]
-        } else {
-          // Maybe the result itself is the metadata
-          metadata = result
-        }
-        
-        if (!metadata) {
-          console.error('[useMeta] No metadata found for:', doctype)
-          throw new Error(`No metadata returned for ${doctype}`)
-        }
-        
-        return metadata
-      } catch (error) {
-        console.error('[useMeta] Error fetching metadata for:', doctype, error)
-        throw error
+      const result = await call('frappe.desk.form.load.getdoctype', { doctype })
+      
+      // The response structure is: {docs: [{...doctype_meta}], user_settings: '{}'}
+      // OR with message wrapper: {message: {docs: [...], ...}}
+      let metadata = null
+      
+      if (result.message) {
+        // Wrapped in message
+        metadata = result.message.docs?.[0] || result.message
+      } else if (result.docs) {
+        // Direct docs array
+        metadata = result.docs[0]
+      } else {
+        // Maybe the result itself is the metadata
+        metadata = result
       }
+      
+      if (!metadata) {
+        throw new Error(`No metadata returned for ${doctype}`)
+      }
+      
+      return metadata
     },
     enabled: !!doctype,
     staleTime: 5 * 60 * 1000,
@@ -48,13 +42,8 @@ export function useDoc(doctype: string, name?: string) {
   return useQuery({
     queryKey: ['doc', doctype, name],
     queryFn: async () => {
-      try {
-        const result = await db.getDoc(doctype, name!)
-        return result || null
-      } catch (error) {
-        console.error('[useDoc] Error fetching document:', doctype, name, error)
-        throw error
-      }
+      const result = await db.getDoc(doctype, name!)
+      return result || null
     },
     enabled: !!name && name !== 'new',
     retry: 1,
@@ -66,17 +55,12 @@ export function useDocList(doctype: string, filters?: any) {
   return useQuery({
     queryKey: ['list', doctype, filters],
     queryFn: async () => {
-      try {
-        const result = await db.getDocList(doctype, { 
-          filters, 
-          fields: ['*'],
-          limit_page_length: 20 
-        })
-        return result
-      } catch (error) {
-        console.error('[useDocList] Error fetching list:', doctype, error)
-        throw error
-      }
+      const result = await db.getDocList(doctype, { 
+        filters, 
+        fields: ['*'],
+        limit_page_length: 20 
+      })
+      return result
     },
     retry: 1,
   })
@@ -90,20 +74,17 @@ export function useBoot() {
       try {
         const result = await call('axon_erp.api.get_boot')
         const boot = result.message || result
-        console.log('[useBoot] Boot data loaded successfully')
         return boot
       } catch (error) {
         // If not authenticated, return empty boot (expected behavior)
         const status = (error as any)?.response?.status
         if (status === 401 || status === 403) {
-          console.log('[useBoot] Not authenticated - returning empty boot')
           return {
             all_doctypes: [],
             user: 'Guest',
             modules: {}
           }
         }
-        console.error('[useBoot] Unexpected error:', error)
         throw error
       }
     },

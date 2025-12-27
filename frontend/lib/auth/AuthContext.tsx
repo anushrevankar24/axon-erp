@@ -35,8 +35,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Session expired or unauthorized
       if (status === 401 || status === 403) {
         setIsAuthenticated(false)
-        // Middleware will catch this, but redirect just in case
-        router.push('/login')
+        // Don't redirect if already on login/setup pages to prevent infinite loop
+        if (typeof window !== 'undefined' && 
+            !window.location.pathname.includes('/login') && 
+            !window.location.pathname.includes('/setup')) {
+          router.push('/login')
+        }
       }
     }
     
@@ -57,14 +61,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Call Frappe's built-in logout method
       await call('logout')
     } catch (err) {
-      console.error('[Auth] Logout error:', err)
       // Continue anyway - clear client state
     } finally {
       // Clear authentication state
       setIsAuthenticated(false)
       
-      // Clear CSRF token
-      document.cookie = 'csrf_token=; Max-Age=0; path=/'
+      // Clear CSRF token (Frappe SDK pattern)
+      if (typeof window !== 'undefined') {
+        delete window.csrf_token
+      }
+      localStorage.removeItem('frappe_csrf_token')
       
       // Redirect to login (full page reload to clear all state)
       window.location.href = '/login'

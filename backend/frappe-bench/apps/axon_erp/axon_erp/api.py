@@ -9,13 +9,16 @@ Only includes APIs that ERPNext doesn't expose or need customization
 
 import frappe
 
-@frappe.whitelist()
+@frappe.whitelist(allow_guest=True)
 def get_boot():
     """
     Get boot info for custom frontend
     
     Wraps Frappe's existing frappe.sessions.get() function and adds all DocTypes.
     This provides the same data ERPNext's own frontend receives on login.
+    
+    Note: allow_guest=True allows unauthenticated calls (returns Guest boot)
+    This is needed for separate frontend architecture where app loads before login check
     
     Returns:
         dict: Boot info including:
@@ -25,6 +28,16 @@ def get_boot():
             - all_doctypes: All DocTypes (our addition for navigation)
             - And 70+ other fields from ERPNext
     """
+    # If Guest user (not logged in), return minimal boot
+    # No CSRF token required for Guest users
+    if frappe.session.user == 'Guest':
+        return {
+            'user': 'Guest',
+            'all_doctypes': [],
+            'modules': {},
+            'message': 'Guest session - please login'
+        }
+    
     # Get standard boot info from Frappe (same data ERPNext UI gets)
     boot = frappe.sessions.get()
     

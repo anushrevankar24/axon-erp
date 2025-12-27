@@ -50,7 +50,7 @@ export function SearchBar() {
     e.preventDefault()
     if (searchQuery.trim()) {
       // TODO: Implement search functionality
-      console.log('Searching for:', searchQuery)
+      // TODO: Implement global search
     }
   }
   

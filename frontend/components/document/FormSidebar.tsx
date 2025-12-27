@@ -148,7 +148,12 @@ function AssignedToSection({ doctype, docname }: { doctype: string, docname: str
   })
 
   if (isLoading) {
-    return <div className="text-xs text-muted-foreground">Loading...</div>
+    return (
+      <div className="space-y-2">
+        <div className="h-6 bg-muted/30 rounded animate-pulse" />
+        <div className="h-6 bg-muted/20 rounded animate-pulse w-3/4" />
+      </div>
+    )
   }
 
   if (!assignments || assignments.length === 0) {
@@ -179,7 +184,12 @@ function AttachmentsSection({ doctype, docname }: { doctype: string, docname: st
   })
 
   if (isLoading) {
-    return <div className="text-xs text-muted-foreground">Loading...</div>
+    return (
+      <div className="space-y-2">
+        <div className="h-4 bg-muted/30 rounded animate-pulse" />
+        <div className="h-4 bg-muted/20 rounded animate-pulse w-2/3" />
+      </div>
+    )
   }
 
   if (!attachments || attachments.length === 0) {
@@ -217,7 +227,12 @@ function TagsSection({ doctype, docname }: { doctype: string, docname: string })
   })
 
   if (isLoading) {
-    return <div className="text-xs text-muted-foreground">Loading...</div>
+    return (
+      <div className="flex gap-2">
+        <div className="h-6 w-16 bg-muted/30 rounded animate-pulse" />
+        <div className="h-6 w-20 bg-muted/20 rounded animate-pulse" />
+      </div>
+    )
   }
 
   if (!tags || tags.length === 0) {

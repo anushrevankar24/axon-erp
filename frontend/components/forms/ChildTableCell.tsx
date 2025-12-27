@@ -225,7 +225,6 @@ export function ChildTableCell({
               const file = e.target.files?.[0]
               if (file) {
                 // TODO: Implement file upload
-                console.log('File upload not yet implemented:', file)
               }
             }}
             className="hidden"

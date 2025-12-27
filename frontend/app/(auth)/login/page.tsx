@@ -27,15 +27,12 @@ function LoginForm() {
     setIsLoading(true)
     
     try {
-      console.log('[Login] Attempting login...')
       await auth.loginWithUsernamePassword({
         username,
         password
       })
       
-      console.log('[Login] Login successful, fetching CSRF token and boot info...')
-      
-      // Fetch CSRF token after login
+      // Fetch CSRF token after login (Frappe SDK pattern)
       try {
         const response = await fetch('/api/method/axon_erp.api.get_csrf_token', {
           method: 'POST',
@@ -50,25 +47,23 @@ function LoginForm() {
           const csrfToken = data.message?.csrf_token
           
           if (csrfToken) {
-            // Store CSRF token in cookie for later use
-            document.cookie = `csrf_token=${csrfToken}; path=/; SameSite=Lax`
-            console.log('[Login] CSRF token fetched and stored')
+            // Store in window.csrf_token (Frappe SDK pattern - official way)
+            window.csrf_token = csrfToken
+            
+            // Backup to localStorage for persistence across page refreshes
+            localStorage.setItem('frappe_csrf_token', csrfToken)
           }
         }
       } catch (csrfError) {
-        console.warn('[Login] Could not fetch CSRF token:', csrfError)
+        console.error('[LOGIN] Failed to fetch CSRF token:', csrfError)
         // Continue anyway - CSRF might be disabled
       }
       
       toast.success('Login successful!')
       
-      console.log('[Login] Invalidating boot query to trigger refetch...')
-      
       // Invalidate and refetch boot query
       await queryClient.invalidateQueries({ queryKey: ['boot'] })
       await queryClient.refetchQueries({ queryKey: ['boot'] })
-      
-      console.log('[Login] Boot query refetched, navigating to:', redirectTo)
       
       // Small delay to ensure boot data is loaded
       await new Promise(resolve => setTimeout(resolve, 300))
@@ -76,7 +71,7 @@ function LoginForm() {
       // Navigate to redirect URL (or dashboard if no redirect)
       router.push(redirectTo)
     } catch (error: any) {
-      console.error('[Login] Login failed:', error)
+      console.error('Login failed:', error.message || 'Invalid credentials')
       toast.error(error.message || 'Invalid credentials')
     } finally {
       setIsLoading(false)

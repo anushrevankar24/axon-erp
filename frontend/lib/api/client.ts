@@ -22,38 +22,66 @@ export const frappe = new FrappeApp(
 if (frappe.axios) {
   frappe.axios.defaults.withCredentials = true
   
-  // Request interceptor - add CSRF token
-  frappe.axios.interceptors.request.use(
-    (config) => {
-      // Add CSRF token for state-changing requests
-      if (config.method?.toLowerCase() === 'post' || config.method?.toLowerCase() === 'put' || config.method?.toLowerCase() === 'delete') {
-        // Get CSRF token from cookie
-        const csrfToken = document.cookie
-          .split('; ')
-          .find(row => row.startsWith('csrf_token='))
-          ?.split('=')[1]
-        
-        if (csrfToken) {
-          config.headers['X-Frappe-CSRF-Token'] = csrfToken
-        } else {
-          console.warn('[API] No CSRF token found in cookies')
-        }
-      }
-      
-      return config
-    },
-    (error) => {
-      console.error('[API] Request error:', error.message)
-      return Promise.reject(error)
+  // Initialize CSRF token from localStorage on app load
+  // This restores the token after page refresh
+  if (typeof window !== 'undefined') {
+    const storedToken = localStorage.getItem('frappe_csrf_token')
+    if (storedToken) {
+      window.csrf_token = storedToken
     }
-  )
+  }
+  
+  // Note: The Frappe JS SDK has built-in CSRF handling in its axios interceptor
+  // It automatically reads from window.csrf_token and sets X-Frappe-CSRF-Token header
+  // See: frappe-js-sdk/lib/utils/axios.js lines 23-33
+  // We don't need a custom interceptor - just keep window.csrf_token populated!
   
   // Response interceptor - handle errors (ERPNext pattern)
   frappe.axios.interceptors.response.use(
     (response) => response,
-    (error) => {
+    async (error) => {
       const status = error.response?.status
       const url = error.config?.url || ''
+      
+      // ============================================
+      // HANDLE CSRF TOKEN EXPIRY/MISMATCH
+      // ============================================
+      if (status === 400 && error.response?.data?.exc_type === 'CSRFTokenError') {
+        // Clear stale token
+        delete window.csrf_token
+        localStorage.removeItem('frappe_csrf_token')
+        
+        // Try to fetch new token (only if we have a session)
+        const hasSid = typeof document !== 'undefined' && 
+                      document.cookie.split('; ').some(row => row.startsWith('sid='))
+        
+        if (hasSid && !url.includes('/login')) {
+          try {
+            const response = await fetch('/api/method/axon_erp.api.get_csrf_token', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' }
+            })
+            
+            if (response.ok) {
+              const data = await response.json()
+              const newToken = data.message?.csrf_token
+              
+              if (newToken) {
+                // Store new token
+                window.csrf_token = newToken
+                localStorage.setItem('frappe_csrf_token', newToken)
+                
+                // Retry the original request
+                return frappe.axios.request(error.config)
+              }
+            }
+          } catch (refreshError) {
+            console.error('[CSRF] Token refresh failed:', refreshError)
+            // Fall through to session expiry handling
+          }
+        }
+      }
       
       // ============================================
       // HANDLE SESSION EXPIRY (ERPNext Pattern)
@@ -63,19 +91,33 @@ if (frappe.axios) {
         // Don't redirect if we're already on login page or calling login/logout
         const isAuthEndpoint = url.includes('/login') || url.includes('/logout')
         const isLoginPage = typeof window !== 'undefined' && 
-                           window.location.pathname.includes('/login')
+                           (window.location.pathname.includes('/login') || 
+                            window.location.pathname.includes('/setup'))
         
-        if (!isAuthEndpoint && !isLoginPage) {
-          console.warn('[API] Session expired (401/403) - redirecting to login')
-          
+        // Don't treat optional feature 403s as session expiry
+        // These endpoints may return 403 due to role permissions, not session expiry
+        const isOptionalFeature = 
+          url.includes('assign_to.get') ||
+          url.includes('tags.get') ||
+          url.includes('get_communications') ||
+          url.includes('get_docinfo')
+        
+        // Prevent infinite loops - check if we're already redirecting
+        const isAlreadyRedirecting = typeof document !== 'undefined' && 
+                                      document.querySelector('[data-session-redirect]')
+        
+        // Only redirect on REAL session expiry, not permission denied for optional features
+        if (!isAuthEndpoint && !isLoginPage && !isAlreadyRedirecting && !isOptionalFeature) {
           // Clear CSRF token (it's tied to the expired session)
-          if (typeof document !== 'undefined') {
-            document.cookie = 'csrf_token=; Max-Age=0; path=/'
+          if (typeof window !== 'undefined') {
+            delete window.csrf_token
           }
+          localStorage.removeItem('frappe_csrf_token')
           
           // Show loading overlay before redirect (better UX)
           if (typeof window !== 'undefined') {
             const overlay = document.createElement('div')
+            overlay.setAttribute('data-session-redirect', 'true')
             overlay.innerHTML = '<div style="text-align:center"><div style="font-size:18px;margin-bottom:10px">Session Expired</div><div>Redirecting to login...</div></div>'
             overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);color:white;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:system-ui,-apple-system,sans-serif'
             document.body.appendChild(overlay)
@@ -97,12 +139,11 @@ if (frappe.axios) {
       // HANDLE NETWORK ERRORS
       // ============================================
       if (!error.response) {
-        console.error('[API] Network error - offline or server unreachable')
         return Promise.reject(new Error('Network error'))
       }
       
       // ============================================
-      // LOG OTHER ERRORS (Keep existing logic)
+      // LOG IMPORTANT ERRORS ONLY
       // ============================================
       const isOptionalFeature = 
         url.includes('assign_to.get') ||
@@ -110,7 +151,15 @@ if (frappe.axios) {
         url.includes('get_communications') ||
         url.includes('get_docinfo')
       
-      if (!isOptionalFeature || (status && status !== 404 && status !== 403)) {
+      // Don't log expected errors: optional features, validation errors (417), permission errors on boot when logged out
+      const isBootPermissionError = url.includes('get_boot') && (status === 403 || status === 401)
+      const shouldSkipLogging = isOptionalFeature || 
+                                 isBootPermissionError || 
+                                 status === 404 || 
+                                 status === 403 || 
+                                 status === 417
+      
+      if (!shouldSkipLogging && status && status >= 400) {
         console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
         console.error('[API ERROR]')
         console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')

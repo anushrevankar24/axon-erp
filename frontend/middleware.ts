@@ -13,25 +13,24 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   
   // Public routes that don't require authentication
-  const publicRoutes = ['/login', '/signup']
+  const publicRoutes = ['/login', '/signup', '/setup']
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
   
   // Check for Frappe session cookie (sid = session ID)
   const sessionCookie = request.cookies.get('sid')
-  const isAuthenticated = !!sessionCookie?.value
+  const hasSessionCookie = !!sessionCookie?.value
   
   // Protect private routes - redirect unauthenticated users to login
-  if (!isAuthenticated && !isPublicRoute) {
+  if (!hasSessionCookie && !isPublicRoute) {
     const loginUrl = new URL('/login', request.url)
     // Preserve original URL for post-login redirect (ERPNext pattern)
     loginUrl.searchParams.set('redirect', pathname)
     return NextResponse.redirect(loginUrl)
   }
   
-  // Prevent authenticated users from accessing login page
-  if (isAuthenticated && isPublicRoute) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
-  }
+  // NOTE: We don't redirect authenticated users away from login page
+  // because the session cookie might be expired. Let the client-side
+  // AuthProvider handle that after checking with the server.
   
   return NextResponse.next()
 }

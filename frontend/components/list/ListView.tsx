@@ -8,6 +8,7 @@ import { StandardFiltersBar } from "./StandardFiltersBar"
 import { ListToolbar } from "./ListToolbar"
 import { EnhancedDataTable, createSortableHeader } from "./EnhancedDataTable"
 import { ListPagination } from "./ListPagination"
+import { TableSkeleton } from "@/components/ui/skeleton"
 import { ColumnDef } from "@tanstack/react-table"
 import { formatDistanceToNow } from "date-fns"
 import { Badge } from "@/components/ui/badge"
@@ -142,11 +143,8 @@ export function ListView({ doctype }: ListViewProps) {
 
   if (metaLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">Loading {doctype}...</p>
-        </div>
+      <div className="flex-1 overflow-auto p-3 bg-gray-50">
+        <TableSkeleton rows={10} columns={6} />
       </div>
     )
   }
