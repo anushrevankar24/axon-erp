@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { X, Filter } from "lucide-react"
 import { useMeta } from "@/lib/api/hooks"
 import { LinkField } from "../forms/LinkField"
+import { SPACING, TYPOGRAPHY, COMPONENTS } from "@/lib/design-system"
+import { cn } from "@/lib/utils"
 
 interface StandardFiltersBarProps {
   doctype: string
@@ -47,19 +49,19 @@ export function StandardFiltersBar({
   const activeFilterCount = Object.keys(filters).length
 
   return (
-    <div className="bg-gradient-to-r from-gray-50 to-white border-b shadow-sm">
-      <div className="px-3 py-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+    <div className="bg-gray-50 border-b border-gray-200">
+      <div className={cn(SPACING.containerPaddingX, "py-2")}>
+        <div className={cn("flex items-center flex-wrap", SPACING.elementGap)}>
+          <div className={cn("flex items-center", SPACING.elementGap)}>
+            <Filter className="h-3.5 w-3.5 text-gray-600" />
+            <span className={TYPOGRAPHY.filterLabel}>
               Filters
             </span>
           </div>
 
           {standardFilters.map((field: any) => (
-            <div key={field.fieldname} className="flex items-center gap-1.5 bg-white border rounded-md px-2 py-1">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wide whitespace-nowrap">
+            <div key={field.fieldname} className={cn("flex items-center bg-white border border-gray-200 rounded-md px-2 py-1", SPACING.elementGap)}>
+              <span className={cn(TYPOGRAPHY.filterLabel, "whitespace-nowrap")}>
                 {field.label}
               </span>
               {renderStandardFilterInput(field, filters[field.fieldname], (value) =>
@@ -70,14 +72,14 @@ export function StandardFiltersBar({
 
           {activeFilterCount > 0 && (
             <>
-              <Badge variant="secondary" className="h-5 text-[10px]">
+              <Badge variant="secondary" className={cn("h-6", TYPOGRAPHY.caption)}>
                 {activeFilterCount}
               </Badge>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={clearAllFilters}
-                className="h-6 px-2 text-xs"
+                className={cn(COMPONENTS.buttonHeight, "px-2", TYPOGRAPHY.caption)}
               >
                 <X className="h-3 w-3" />
               </Button>
@@ -99,12 +101,12 @@ function renderStandardFilterInput(
       const options = field.options?.split('\n').filter((o: string) => o.trim()) || []
       return (
         <Select value={value || undefined} onValueChange={onChange}>
-          <SelectTrigger className="h-6 w-[140px] text-xs border-0 shadow-none">
+          <SelectTrigger className={cn(COMPONENTS.selectHeight, "w-[140px]", TYPOGRAPHY.body, "border-0 shadow-none")}>
             <SelectValue placeholder="All" />
           </SelectTrigger>
           <SelectContent>
             {options.map((opt: string) => (
-              <SelectItem key={opt} value={opt} className="text-xs">
+              <SelectItem key={opt} value={opt} className={TYPOGRAPHY.caption}>
                 {opt}
               </SelectItem>
             ))}
@@ -131,19 +133,19 @@ function renderStandardFilterInput(
           placeholder="All"
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
-          className="h-6 w-[120px] text-xs border-0 shadow-none"
+          className={cn(COMPONENTS.inputHeight, "w-[120px]", TYPOGRAPHY.body, "border-0 shadow-none")}
         />
       )
 
     case 'Check':
       return (
         <Select value={value === undefined ? undefined : String(value)} onValueChange={(v) => onChange(v ? Number(v) : undefined)}>
-          <SelectTrigger className="h-6 w-[100px] text-xs border-0 shadow-none">
+          <SelectTrigger className={cn(COMPONENTS.selectHeight, "w-[100px]", TYPOGRAPHY.body, "border-0 shadow-none")}>
             <SelectValue placeholder="All" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="1" className="text-xs">Yes</SelectItem>
-            <SelectItem value="0" className="text-xs">No</SelectItem>
+            <SelectItem value="1" className={TYPOGRAPHY.caption}>Yes</SelectItem>
+            <SelectItem value="0" className={TYPOGRAPHY.caption}>No</SelectItem>
           </SelectContent>
         </Select>
       )
@@ -154,7 +156,7 @@ function renderStandardFilterInput(
           type="date"
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
-          className="h-6 w-[130px] text-xs border-0 shadow-none"
+          className={cn(COMPONENTS.inputHeight, "w-[130px]", TYPOGRAPHY.body, "border-0 shadow-none")}
         />
       )
 
@@ -165,7 +167,7 @@ function renderStandardFilterInput(
           placeholder="All"
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
-          className="h-6 w-[120px] text-xs border-0 shadow-none"
+          className={cn(COMPONENTS.inputHeight, "w-[120px]", TYPOGRAPHY.body, "border-0 shadow-none")}
         />
       )
   }

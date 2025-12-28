@@ -31,6 +31,7 @@ interface LinkFieldProps {
   doctype: string
   placeholder?: string
   disabled?: boolean
+  hasError?: boolean
 }
 
 // Debounce hook
@@ -100,7 +101,8 @@ export function LinkField({
   onChange,
   doctype,
   placeholder,
-  disabled = false
+  disabled = false,
+  hasError = false
 }: LinkFieldProps) {
   const [open, setOpen] = React.useState(false)
   const [searchTerm, setSearchTerm] = React.useState("")
@@ -166,8 +168,9 @@ export function LinkField({
           aria-expanded={open}
           disabled={disabled}
           className={cn(
-            "w-full justify-between font-normal",
-            !value && "text-muted-foreground"
+            "w-full justify-between font-normal h-8 text-sm",
+            !value && "text-muted-foreground",
+            hasError && "border-red-500 focus:ring-red-500"
           )}
         >
           <span className="truncate">

@@ -143,7 +143,8 @@ if (frappe.axios) {
       }
       
       // ============================================
-      // LOG IMPORTANT ERRORS ONLY
+      // LOG ERRORS (ERPNext Pattern)
+      // Pattern from: frappe/request.js cleanup() function
       // ============================================
       const isOptionalFeature = 
         url.includes('assign_to.get') ||
@@ -151,39 +152,33 @@ if (frappe.axios) {
         url.includes('get_communications') ||
         url.includes('get_docinfo')
       
-      // Don't log expected errors: optional features, validation errors (417), permission errors on boot when logged out
+      // Don't log expected errors: validation (417), permissions (403), not found (404), conflicts (409)
       const isBootPermissionError = url.includes('get_boot') && (status === 403 || status === 401)
       const shouldSkipLogging = isOptionalFeature || 
                                  isBootPermissionError || 
                                  status === 404 || 
                                  status === 403 || 
-                                 status === 417
+                                 status === 417 ||
+                                 status === 409  // Duplicate/Conflict errors
       
+      // Match ERPNext: Only log exception traceback (r.exc)
       if (!shouldSkipLogging && status && status >= 400) {
-        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-        console.error('[API ERROR]')
-        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-        console.error('URL:', url)
-        console.error('Method:', error.config?.method?.toUpperCase())
-        console.error('Status:', status)
-        console.error('Error Message:', error.message)
-        
         const responseData = error.response?.data
-        if (responseData) {
-          console.error('Response Data:', responseData)
-          if (responseData.exception) {
-            console.error('Exception:', responseData.exception)
-          }
-          if (responseData._server_messages) {
-            try {
-              const messages = JSON.parse(responseData._server_messages)
-              console.error('Server Messages:', messages)
-            } catch {
-              console.error('Server Messages (raw):', responseData._server_messages)
+        if (responseData?.exc) {
+          try {
+            const exc = JSON.parse(responseData.exc)
+            if (Array.isArray(exc)) {
+              exc.forEach(e => e && console.error(e))
+            } else {
+              console.error(exc)
+            }
+          } catch {
+            // If exc parsing fails, try exception field
+            if (responseData.exception) {
+              console.error(responseData.exception)
             }
           }
         }
-        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
       }
       
       return Promise.reject(error)

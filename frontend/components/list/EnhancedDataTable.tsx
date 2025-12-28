@@ -32,6 +32,9 @@ import {
 import { ArrowUpDown, MoreHorizontal, Edit, Copy, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { TYPOGRAPHY, COMPONENTS } from "@/lib/design-system"
+import { slugify } from "@/lib/utils/workspace"
+import { cn } from "@/lib/utils"
 
 interface EnhancedDataTableProps {
   data: any[]
@@ -96,19 +99,19 @@ export function EnhancedDataTable({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild>
-                  <Link href={`/app/${module}/${encodeURIComponent(doctype)}/${encodeURIComponent(doc.name)}`}>
-                    <Edit className="mr-2 h-4 w-4" />
+                <DropdownMenuItem asChild className={TYPOGRAPHY.caption}>
+                  <Link href={`/app/${slugify(doctype)}/${encodeURIComponent(doc.name)}`}>
+                    <Edit className="mr-2 h-3.5 w-3.5" />
                     Edit
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Copy className="mr-2 h-4 w-4" />
+                <DropdownMenuItem className={TYPOGRAPHY.caption}>
+                  <Copy className="mr-2 h-3.5 w-3.5" />
                   Duplicate
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive">
-                  <Trash2 className="mr-2 h-4 w-4" />
+                <DropdownMenuItem className={cn("text-destructive", TYPOGRAPHY.caption)}>
+                  <Trash2 className="mr-2 h-3.5 w-3.5" />
                   Delete
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -184,7 +187,7 @@ export function EnhancedDataTable({
           <p className="text-sm text-muted-foreground mb-4">
             Get started by creating your first {doctype}
           </p>
-          <Button onClick={() => router.push(`/app/${module}/${encodeURIComponent(doctype)}/new`)}>
+          <Button onClick={() => router.push(`/app/${slugify(doctype)}/new`)}>
             Create {doctype}
           </Button>
         </div>

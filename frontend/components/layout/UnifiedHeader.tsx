@@ -34,7 +34,7 @@ export function UnifiedHeader() {
           
           {/* Dynamic Breadcrumbs - hidden on mobile */}
           <div className="hidden md:block">
-            <Breadcrumbs />
+          <Breadcrumbs />
           </div>
         </div>
         

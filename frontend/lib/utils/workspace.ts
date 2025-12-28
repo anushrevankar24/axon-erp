@@ -68,14 +68,48 @@ export function getDefaultWorkspace(boot: BootData): Workspace | null {
 }
 
 /**
- * Slugify workspace name for URLs
- * Pattern from: frappe/router.js slug()
+ * Decode URL component safely
+ * Pattern from: frappe/router.js decode_component() lines 562-569
  */
-export function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/ /g, '-')
-    .replace(/[^\w-]+/g, '')
+export function decodeComponent(component: string): string {
+  try {
+    return decodeURIComponent(component)
+  } catch (e) {
+    if (e instanceof URIError) {
+      // Return as-is if decode fails (ERPNext pattern)
+      return component
+    } else {
+      throw e
+    }
+  }
+}
+
+/**
+ * Slugify workspace/doctype name for URLs
+ * Pattern from: frappe/router.js slug() line 575-577
+ * EXACT ERPNext implementation
+ */
+export function slugify(name: string): string {
+  return name.toLowerCase().replace(/ /g, '-')
+}
+
+/**
+ * Convert slug back to DocType name
+ * Pattern from: frappe/router.js setup() line 123-136
+ * Uses boot.user.can_read to find original name
+ */
+export function unslugify(slug: string, boot: BootData): string | null {
+  // Try exact match first (for already correct casing)
+  if (boot.user?.can_read?.includes(slug)) {
+    return slug
+  }
+  
+  // Try slug match (convert back from URL slug)
+  const doctype = boot.user?.can_read?.find(
+    (dt: string) => slugify(dt) === slug
+  )
+  
+  return doctype || null
 }
 
 /**

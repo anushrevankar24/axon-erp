@@ -19,7 +19,7 @@ interface ListViewProps {
 
 export function ListView({ doctype }: ListViewProps) {
   const params = useParams()
-  const module = decodeURIComponent(params.module as string)
+  const workspace = params.workspace ? decodeURIComponent(params.workspace as string) : ''
   
   // State management
   const [filters, setFilters] = React.useState<Record<string, any>>({})
@@ -143,14 +143,14 @@ export function ListView({ doctype }: ListViewProps) {
 
   if (metaLoading) {
     return (
-      <div className="flex-1 overflow-auto p-3 bg-gray-50">
+      <div className="flex-1 p-3 bg-gray-50">
         <TableSkeleton rows={10} columns={6} />
       </div>
     )
   }
 
   return (
-    <>
+    <div className="flex-1 flex min-h-0">
       {/* Left: Common Filters Sidebar */}
       <FilterSidebar
         doctype={doctype}
@@ -159,7 +159,7 @@ export function ListView({ doctype }: ListViewProps) {
       />
 
       {/* Right: Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Standard Filters Bar (DocType-specific) */}
         <StandardFiltersBar
           doctype={doctype}
@@ -170,7 +170,7 @@ export function ListView({ doctype }: ListViewProps) {
         {/* Toolbar (Search + Actions) */}
         <ListToolbar
           doctype={doctype}
-          module={module}
+          module={workspace}
           searchText={searchText}
           onSearchChange={handleSearchChange}
           selectedCount={selectedRows.length}
@@ -181,13 +181,13 @@ export function ListView({ doctype }: ListViewProps) {
           onBulkDelete={selectedRows.length > 0 ? handleBulkDelete : undefined}
         />
 
-        {/* Data Table */}
-        <div className="flex-1 overflow-auto p-3 bg-gray-50">
+        {/* Data Table - horizontal scroll only when needed */}
+        <div className="flex-1 p-3 bg-gray-50 overflow-x-auto">
           <EnhancedDataTable
             data={listData || []}
             columns={columns}
             doctype={doctype}
-            module={module}
+            module={workspace}
             isLoading={listLoading}
             onSelectionChange={setSelectedRows}
           />
@@ -204,7 +204,7 @@ export function ListView({ doctype }: ListViewProps) {
           />
         )}
       </div>
-    </>
+    </div>
   )
 }
 

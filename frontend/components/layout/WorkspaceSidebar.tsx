@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation'
 import { Home, Settings, LogOut, Menu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useWorkspaces } from '@/lib/api/workspace'
@@ -84,8 +83,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </Link>
       </div>
       
-      {/* Workspace Navigation */}
-      <ScrollArea className="flex-1">
+      {/* Workspace Navigation - ERPNext style: native scroll with transparent track */}
+      <div className="flex-1 overflow-y-auto scrollbar-sidebar">
         <div className="p-2">
           {error && (
             <div className="p-4 text-red-500 text-sm rounded bg-red-50">
@@ -125,7 +124,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </>
           )}
         </div>
-      </ScrollArea>
+      </div>
       
       {/* Footer */}
       <Separator />
@@ -152,11 +151,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 /**
- * Desktop Sidebar Component
+ * Workspace Sidebar Component (Page-Specific)
+ * Pattern from: frappe/views/workspace/workspace.js prepare_container()
+ * Sidebar is part of the workspace page, not global!
  */
 export function WorkspaceSidebar() {
   return (
-    <aside className="hidden lg:flex w-64 border-r h-full flex-col bg-background">
+    <aside className="w-64 border-r border-gray-200 h-full flex-col bg-background flex">
       <SidebarContent />
     </aside>
   )

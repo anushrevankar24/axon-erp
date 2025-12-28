@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { getWorkspaceIcon } from '@/lib/utils/icons'
+import { slugify } from '@/lib/utils/workspace'
 import type { WorkspaceShortcut } from '@/lib/types/workspace'
 
 interface ShortcutCardProps {
@@ -16,17 +17,17 @@ export function ShortcutCard({ shortcut, workspaceModule }: ShortcutCardProps) {
   const getHref = () => {
     if (shortcut.type === 'URL') return shortcut.url || '#'
     if (shortcut.type === 'DocType') {
-      // ERPNext pattern: Direct DocType route
-      return `/app/${shortcut.link_to}`
+      // ERPNext pattern: Use slug - "Item" → "item"
+      return `/app/${slugify(shortcut.link_to)}`
     }
     if (shortcut.type === 'Report') {
-      return `/app/query-report/${shortcut.link_to}`
+      return `/app/query-report/${slugify(shortcut.link_to)}`
     }
     if (shortcut.type === 'Dashboard') {
-      return `/app/dashboard-view/${shortcut.link_to}`
+      return `/app/dashboard-view/${slugify(shortcut.link_to)}`
     }
     if (shortcut.type === 'Page') {
-      return `/app/${shortcut.link_to}`
+      return `/app/${slugify(shortcut.link_to)}`
     }
     return '#'
   }

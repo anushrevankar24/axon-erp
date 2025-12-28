@@ -10,12 +10,12 @@ interface ListViewLayoutProps {
 
 export function ListViewLayout({ doctype, children }: ListViewLayoutProps) {
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="min-h-screen flex flex-col">
       {/* Unified Header */}
       <UnifiedHeader />
       
-      {/* Main content area */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main content area - body handles scrolling */}
+      <div className="flex-1 flex">
         {children}
       </div>
     </div>

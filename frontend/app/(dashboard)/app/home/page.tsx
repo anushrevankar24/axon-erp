@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDocList } from '@/lib/api/hooks'
 import { TrendingUp, Users, ShoppingCart, Package } from 'lucide-react'
+import { WorkspaceSidebar } from '@/components/layout/WorkspaceSidebar'
 
 export default function HomePage() {
   const { data: salesInvoices } = useDocList('Sales Invoice', { docstatus: 1 })
@@ -42,13 +43,19 @@ export default function HomePage() {
   ]
   
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Home</h1>
-        <p className="text-muted-foreground">Welcome to Axon ERP</p>
-      </div>
+    <div className="flex-1 flex overflow-hidden">
+      {/* Workspace Sidebar - Part of this page (ERPNext pattern) */}
+      <WorkspaceSidebar />
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Main Content - Scrollable */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 max-w-7xl mx-auto space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold">Home</h1>
+            <p className="text-muted-foreground">Welcome to Axon ERP</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => {
           const Icon = stat.icon
           return (
@@ -109,6 +116,8 @@ export default function HomePage() {
             )}
           </CardContent>
         </Card>
+      </div>
+        </div>
       </div>
     </div>
   )

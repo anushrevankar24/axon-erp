@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { FileText, BarChart3, Layout } from 'lucide-react'
+import { slugify } from '@/lib/utils/workspace'
 import type { WorkspaceLink } from '@/lib/types/workspace'
 
 interface LinkItemProps {
@@ -17,17 +18,17 @@ export function LinkItem({ link, workspaceModule }: LinkItemProps) {
   }
 
   const getHref = () => {
-    // ERPNext pattern: Direct DocType routes
+    // ERPNext pattern: Use slug - "Item" → "item"
     if (link.link_type === 'DocType') {
-      return `/app/${link.link_to}`
+      return `/app/${slugify(link.link_to)}`
     }
     if (link.link_type === 'Report') {
       return link.is_query_report 
-        ? `/app/query-report/${link.link_to}`
-        : `/app/report/${link.link_to}`
+        ? `/app/query-report/${slugify(link.link_to)}`
+        : `/app/report/${slugify(link.link_to)}`
     }
     if (link.link_type === 'Page') {
-      return `/app/${link.link_to}`
+      return `/app/${slugify(link.link_to)}`
     }
     return '#'
   }

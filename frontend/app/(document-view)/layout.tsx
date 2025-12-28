@@ -6,10 +6,11 @@ export default function DocumentViewLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="h-screen overflow-hidden bg-background flex flex-col">
-      {/* Unified Header - consistent across all pages */}
+    <div className="min-h-screen flex flex-col bg-background">
+      {/* Unified Header - sticky at top */}
       <UnifiedHeader />
-      <div className="flex-1 overflow-auto">
+      {/* Main content - no nested scroll, body handles scrolling */}
+      <div className="flex-1">
         {children}
       </div>
     </div>

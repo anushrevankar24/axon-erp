@@ -1,18 +1,108 @@
-import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form'
+/**
+ * Field Renderer Component - ERPNext Pattern
+ * 
+ * Renders form fields based on DocField metadata.
+ * Includes:
+ * - Error state styling (has-error class)
+ * - Time format fix (truncate microseconds)
+ * - Scroll-to-field support via data attributes
+ * 
+ * Based on: frappe/public/js/frappe/form/controls/base_input.js
+ */
+
+import * as React from 'react'
+import { FormField, FormItem, FormLabel, FormControl } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LinkField } from './LinkField'
 import { ChildTable } from './ChildTable'
+import { cn } from '@/lib/utils'
 
-export function FieldRenderer({ field, form }: any) {
+// ============================================================================
+// Types
+// ============================================================================
+
+interface FieldMeta {
+  fieldname: string
+  fieldtype: string
+  label: string
+  reqd?: number | boolean
+  read_only?: number | boolean
+  hidden?: number | boolean
+  options?: string
+  description?: string
+  length?: number
+  default?: any
+}
+
+interface FieldRendererProps {
+  field: FieldMeta
+  form: any // UseFormReturn from react-hook-form
+}
+
+// ============================================================================
+// Time Format Utilities
+// ============================================================================
+
+/**
+ * Format time value for HTML input
+ * Frappe stores time with microseconds (e.g., "23:38:26.612415")
+ * HTML <input type="time"> only accepts up to milliseconds (HH:mm:ss.SSS)
+ */
+function formatTimeForInput(value: string | null | undefined): string {
+  if (!value) return ''
+  
+  // Handle full datetime strings
+  if (value.includes(' ')) {
+    value = value.split(' ')[1]
+  }
+  
+  // Truncate microseconds to milliseconds
+  // "23:38:26.612415" -> "23:38:26.612" or "23:38:26"
+  const match = value.match(/^(\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?/)
+  if (match) {
+    return match[1] // Return just HH:mm:ss
+  }
+  
+  return value
+}
+
+/**
+ * Format datetime value for HTML input
+ * Frappe stores datetime with microseconds and space separator
+ */
+function formatDatetimeForInput(value: string | null | undefined): string {
+  if (!value) return ''
+  
+  // Replace space with T for HTML datetime-local input
+  // "2024-01-15 23:38:26.612415" -> "2024-01-15T23:38:26"
+  const parts = value.split(' ')
+  if (parts.length === 2) {
+    const date = parts[0]
+    const time = formatTimeForInput(parts[1])
+    return `${date}T${time}`
+  }
+  
+  return value.replace(' ', 'T')
+}
+
+// ============================================================================
+// Main Component
+// ============================================================================
+
+export function FieldRenderer({ field, form }: FieldRendererProps) {
   const fieldName = field.fieldname
   
   // Skip hidden fields and breaks
   if (field.hidden || ['Section Break', 'Column Break', 'HTML', 'Tab Break'].includes(field.fieldtype)) {
     return null
   }
+  
+  // Get error state from form
+  const errorState = form.formState.errors[fieldName]
+  const hasError = !!errorState
   
   // Special handling for checkbox - no label wrapper
   if (field.fieldtype === 'Check') {
@@ -21,14 +111,29 @@ export function FieldRenderer({ field, form }: any) {
         control={form.control}
         name={fieldName}
         render={({ field: formField }) => (
-          <FormItem>
+          <FormItem 
+            className={cn(hasError && 'has-error')}
+            data-fieldname={fieldName}
+            role="group"
+            aria-invalid={hasError}
+            aria-describedby={hasError ? `${fieldName}-error` : undefined}
+          >
             <FormControl>
-              {renderFieldInput(field, formField, form)}
+              {renderFieldInput(field, formField, form, hasError)}
             </FormControl>
-            {field.description && (
+            
+            {/* Show inline error message or field description */}
+            {hasError && errorState.message ? (
+              <div 
+                id={`${fieldName}-error`}
+                className="field-error-message"
+                role="alert"
+              >
+                {errorState.message}
+              </div>
+            ) : field.description ? (
               <p className="text-[11px] text-gray-500 mt-0.5">{field.description}</p>
-            )}
-            <FormMessage className="text-xs" />
+            ) : null}
           </FormItem>
         )}
       />
@@ -40,38 +145,97 @@ export function FieldRenderer({ field, form }: any) {
       control={form.control}
       name={fieldName}
       render={({ field: formField }) => (
-        <FormItem>
-          <FormLabel className="text-xs font-medium text-gray-600">
+        <FormItem 
+          className={cn(hasError && 'has-error')}
+          data-fieldname={fieldName}
+          role="group"
+          aria-invalid={hasError}
+          aria-describedby={hasError ? `${fieldName}-error` : undefined}
+        >
+          <FormLabel className={cn(
+            "text-xs font-medium",
+            hasError ? "text-red-600" : "text-gray-600",
+            field.reqd && "reqd"
+          )}>
             {field.label}
-            {field.reqd === 1 && <span className="text-red-500 ml-1">*</span>}
           </FormLabel>
           <FormControl>
-            {renderFieldInput(field, formField, form)}
+            {renderFieldInput(field, formField, form, hasError)}
           </FormControl>
-          {field.description && (
+          
+          {/* Show inline error message or field description */}
+          {hasError && errorState.message ? (
+            <div 
+              id={`${fieldName}-error`}
+              className="field-error-message"
+              role="alert"
+            >
+              {errorState.message}
+            </div>
+          ) : field.description ? (
             <p className="text-[11px] text-gray-500 mt-0.5">{field.description}</p>
-          )}
-          <FormMessage className="text-xs" />
+          ) : null}
         </FormItem>
       )}
     />
   )
 }
 
-function renderFieldInput(field: any, formField: any, form?: any) {
+// ============================================================================
+// Field Input Renderer
+// ============================================================================
+
+function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError?: boolean) {
+  // Common input class with error state
+  const inputClass = cn(
+    "h-8 text-sm",
+    hasError && "border-red-500 focus:ring-red-500"
+  )
+  
   switch (field.fieldtype) {
     case 'Data':
     case 'Barcode':
     case 'Phone':
     case 'Password':
-      return <Input type={field.fieldtype === 'Password' ? 'password' : 'text'} className="h-8 text-sm" {...formField} value={formField.value || ''} />
+      return (
+        <Input 
+          type={field.fieldtype === 'Password' ? 'password' : 'text'} 
+          className={inputClass} 
+          {...formField} 
+          value={formField.value || ''} 
+        />
+      )
     
     case 'Int':
-      return <Input type="number" step="1" className="h-8 text-sm" {...formField} value={formField.value || ''} />
+      return (
+        <Input 
+          type="number" 
+          step="1" 
+          className={inputClass} 
+          {...formField} 
+          value={formField.value ?? ''} 
+          onChange={(e) => {
+            const val = e.target.value
+            formField.onChange(val === '' ? null : parseInt(val, 10))
+          }}
+        />
+      )
     
     case 'Float':
     case 'Percent':
-      return <Input type="number" step="0.01" className="h-8 text-sm" {...formField} value={formField.value || ''} />
+      return (
+        <Input 
+          type="number" 
+          step="0.01" 
+          className={inputClass} 
+          {...formField} 
+          value={formField.value ?? ''} 
+          onChange={(e) => {
+            const val = e.target.value
+            formField.onChange(val === '' ? null : parseFloat(val))
+          }}
+        />
+      )
     
     case 'Currency':
       return (
@@ -79,23 +243,73 @@ function renderFieldInput(field: any, formField: any, form?: any) {
           <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">
             $
           </span>
-          <Input type="number" step="0.01" className="pl-8 h-8 text-sm" {...formField} value={formField.value || ''} />
+          <Input 
+            type="number" 
+            step="0.01" 
+            className={cn(inputClass, "pl-8")} 
+            {...formField} 
+            value={formField.value ?? ''} 
+            onChange={(e) => {
+              const val = e.target.value
+              formField.onChange(val === '' ? null : parseFloat(val))
+            }}
+          />
         </div>
       )
     
     case 'Text':
     case 'Small Text':
     case 'Long Text':
-      return <Textarea rows={field.fieldtype === 'Long Text' ? 6 : 3} className="text-sm resize-none" {...formField} value={formField.value || ''} />
+      return (
+        <Textarea 
+          rows={field.fieldtype === 'Long Text' ? 6 : 3} 
+          className={cn(
+            "text-sm resize-none",
+            hasError && "border-red-500 focus:ring-red-500"
+          )} 
+          {...formField} 
+          value={formField.value || ''} 
+        />
+      )
     
     case 'Date':
-      return <Input type="date" className="h-8 text-sm" {...formField} value={formField.value || ''} />
+      return (
+        <Input 
+          type="date" 
+          className={inputClass} 
+          {...formField} 
+          value={formField.value || ''} 
+        />
+      )
     
     case 'Datetime':
-      return <Input type="datetime-local" className="h-8 text-sm" {...formField} value={formField.value || ''} />
+      return (
+        <Input 
+          type="datetime-local" 
+          className={inputClass} 
+          {...formField} 
+          value={formatDatetimeForInput(formField.value)} 
+          onChange={(e) => {
+            // Convert back to Frappe format (space separator)
+            const val = e.target.value
+            formField.onChange(val ? val.replace('T', ' ') : '')
+          }}
+        />
+      )
     
     case 'Time':
-      return <Input type="time" className="h-8 text-sm" {...formField} value={formField.value || ''} />
+      return (
+        <Input 
+          type="time" 
+          step="1"  // Allow seconds
+          className={inputClass} 
+          {...formField} 
+          value={formatTimeForInput(formField.value)} 
+          onChange={(e) => {
+            formField.onChange(e.target.value)
+          }}
+        />
+      )
     
     case 'Check':
       return (
@@ -103,11 +317,14 @@ function renderFieldInput(field: any, formField: any, form?: any) {
           <Checkbox
             checked={formField.value === 1 || formField.value === true}
             onCheckedChange={(checked) => formField.onChange(checked ? 1 : 0)}
-            className="h-4 w-4"
+            className={cn("h-4 w-4", hasError && "border-red-500")}
           />
-          <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+          <label className={cn(
+            "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
+            hasError && "text-red-600",
+            field.reqd && "reqd"
+          )}>
             {field.label}
-            {field.reqd === 1 && <span className="text-red-500 ml-1">*</span>}
           </label>
         </div>
       )
@@ -118,7 +335,7 @@ function renderFieldInput(field: any, formField: any, form?: any) {
       
       return (
         <Select value={formField.value || ''} onValueChange={formField.onChange}>
-          <SelectTrigger className="h-8 text-sm">
+          <SelectTrigger className={cn(inputClass, hasError && "border-red-500")}>
             <SelectValue placeholder={`Select ${field.label}`} />
           </SelectTrigger>
           <SelectContent>
@@ -136,9 +353,10 @@ function renderFieldInput(field: any, formField: any, form?: any) {
         <LinkField
           value={formField.value || ''}
           onChange={formField.onChange}
-          doctype={field.options}
+          doctype={field.options || ''}
           placeholder={`Select ${field.options}`}
           disabled={field.read_only === 1}
+          hasError={hasError}
         />
       )
     
@@ -147,7 +365,7 @@ function renderFieldInput(field: any, formField: any, form?: any) {
         <ChildTable
           value={formField.value || []}
           onChange={formField.onChange}
-          doctype={field.options}
+          doctype={field.options || ''}
           disabled={field.read_only === 1}
           parentForm={form}
         />
@@ -156,7 +374,10 @@ function renderFieldInput(field: any, formField: any, form?: any) {
     case 'Attach':
     case 'Attach Image':
       return (
-        <div className="border-2 border-dashed rounded p-4 text-center">
+        <div className={cn(
+          "border-2 border-dashed rounded p-4 text-center",
+          hasError && "border-red-500"
+        )}>
           <Input type="file" className="hidden" id={field.fieldname} />
           <label htmlFor={field.fieldname} className="cursor-pointer">
             <p className="text-sm text-muted-foreground">Click to upload file</p>
@@ -167,15 +388,74 @@ function renderFieldInput(field: any, formField: any, form?: any) {
     case 'Text Editor':
     case 'Code':
     case 'HTML':
-      return <Textarea rows={8} {...formField} value={formField.value || ''} className="font-mono text-sm resize-none" />
+      return (
+        <Textarea 
+          rows={8} 
+          {...formField} 
+          value={formField.value || ''} 
+          className={cn(
+            "font-mono text-sm resize-none",
+            hasError && "border-red-500 focus:ring-red-500"
+          )} 
+        />
+      )
     
     case 'Read Only':
       return (
-        <Input {...formField} value={formField.value || ''} disabled className="bg-gray-50 h-8 text-sm" />
+        <Input 
+          {...formField} 
+          value={formField.value || ''} 
+          disabled 
+          className="bg-gray-50 h-8 text-sm" 
+        />
       )
     
     default:
-      return <Input {...formField} value={formField.value || ''} placeholder={field.fieldtype} className="h-8 text-sm" />
+      return (
+        <Input 
+          {...formField} 
+          value={formField.value || ''} 
+          placeholder={field.fieldtype} 
+          className={inputClass} 
+        />
+      )
   }
 }
 
+// ============================================================================
+// Scroll to Field Utility
+// ============================================================================
+
+/**
+ * Scroll to a field by its fieldname
+ * Uses the data-fieldname attribute set on FormItem
+ */
+export function scrollToField(fieldname: string): boolean {
+  const element = document.querySelector(`[data-fieldname="${fieldname}"]`)
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    
+    // Focus the input if possible
+    const input = element.querySelector('input, textarea, select') as HTMLElement
+    if (input) {
+      setTimeout(() => input.focus(), 300)
+    }
+    
+    return true
+  }
+  return false
+}
+
+/**
+ * Scroll to the first field with an error
+ */
+export function scrollToFirstError(form: any): boolean {
+  const errors = form.formState.errors
+  const firstErrorField = Object.keys(errors)[0]
+  
+  if (firstErrorField) {
+    return scrollToField(firstErrorField)
+  }
+  
+  return false
+}

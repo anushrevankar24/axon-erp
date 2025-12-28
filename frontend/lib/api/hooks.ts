@@ -1,35 +1,70 @@
+/**
+ * React Query Hooks - ERPNext Pattern
+ * 
+ * Uses Desk API for document operations to get full validation and error handling.
+ * 
+ * API Pattern:
+ * - Document CRUD: Desk API (frappe.desk.form.*)
+ * - List/Report: Desk API (frappe.desk.reportview.*)
+ * - Authentication: Already using Desk API (see client.ts)
+ */
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { db, call } from './client'
+import { call } from './client'
 import { useMemo } from 'react'
 import { getList, getListCount, getListFields } from './list'
+import { 
+  getDocument, 
+  getDocType, 
+  saveDocument, 
+  deleteDocument,
+  type DocumentSaveResult 
+} from './document'
 
-// Fetch DocType metadata
+// ============================================================================
+// DocType Metadata Hooks
+// ============================================================================
+
+/**
+ * Fetch DocType metadata using Desk API
+ * Returns the full meta with all fields, links, and child table metas
+ */
 export function useMeta(doctype: string) {
   return useQuery({
     queryKey: ['meta', doctype],
     queryFn: async () => {
-      const result = await call('frappe.desk.form.load.getdoctype', { doctype })
+      const result = await getDocType(doctype)
       
-      // The response structure is: {docs: [{...doctype_meta}], user_settings: '{}'}
-      // OR with message wrapper: {message: {docs: [...], ...}}
-      let metadata = null
-      
-      if (result.message) {
-        // Wrapped in message
-        metadata = result.message.docs?.[0] || result.message
-      } else if (result.docs) {
-        // Direct docs array
-        metadata = result.docs[0]
-      } else {
-        // Maybe the result itself is the metadata
-        metadata = result
+      if (!result.success || !result.meta) {
+        throw new Error(result.error?.message || `No metadata returned for ${doctype}`)
       }
       
-      if (!metadata) {
-        throw new Error(`No metadata returned for ${doctype}`)
+      return result.meta
+    },
+    enabled: !!doctype,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    retry: 1,
+  })
+}
+
+/**
+ * Get all child table metas for a DocType
+ */
+export function useMetaBundle(doctype: string) {
+  return useQuery({
+    queryKey: ['meta-bundle', doctype],
+    queryFn: async () => {
+      const result = await getDocType(doctype)
+      
+      if (!result.success) {
+        throw new Error(result.error?.message || `Failed to load ${doctype}`)
       }
       
-      return metadata
+      return {
+        meta: result.meta,
+        docs: result.docs, // Includes child table metas
+        user_settings: result.user_settings
+      }
     },
     enabled: !!doctype,
     staleTime: 5 * 60 * 1000,
@@ -37,28 +72,74 @@ export function useMeta(doctype: string) {
   })
 }
 
-// Fetch single document
+// ============================================================================
+// Document Hooks - Using Desk API
+// ============================================================================
+
+/**
+ * Fetch single document using Desk API
+ * Returns document with docinfo (attachments, comments, versions, etc.)
+ */
 export function useDoc(doctype: string, name?: string) {
   return useQuery({
     queryKey: ['doc', doctype, name],
     queryFn: async () => {
-      const result = await db.getDoc(doctype, name!)
-      return result || null
+      const result = await getDocument(doctype, name!)
+      
+      if (!result.success) {
+        // Return null for not found (handled by component)
+        if (result.error?.type === 'not_found') {
+          return null
+        }
+        throw new Error(result.error?.message || 'Failed to load document')
+      }
+      
+      return result.doc
     },
     enabled: !!name && name !== 'new',
     retry: 1,
   })
 }
 
-// Fetch document list
+/**
+ * Fetch document with docinfo (for document view with timeline, attachments, etc.)
+ */
+export function useDocWithInfo(doctype: string, name?: string) {
+  return useQuery({
+    queryKey: ['doc-with-info', doctype, name],
+    queryFn: async () => {
+      const result = await getDocument(doctype, name!)
+      
+      if (!result.success) {
+        if (result.error?.type === 'not_found') {
+          return null
+        }
+        throw new Error(result.error?.message || 'Failed to load document')
+      }
+      
+      return {
+        doc: result.doc,
+        docinfo: result.docinfo
+      }
+    },
+    enabled: !!name && name !== 'new',
+    retry: 1,
+  })
+}
+
+/**
+ * Fetch document list using Desk API
+ * Uses frappe.desk.reportview.get_list for full functionality
+ */
 export function useDocList(doctype: string, filters?: any) {
   return useQuery({
     queryKey: ['list', doctype, filters],
     queryFn: async () => {
-      const result = await db.getDocList(doctype, { 
-        filters, 
-        fields: ['*'],
-        limit_page_length: 20 
+      const result = await getList({
+        doctype,
+        filters,
+        fields: ['name'],
+        limit_page_length: 20
       })
       return result
     },
@@ -66,7 +147,132 @@ export function useDocList(doctype: string, filters?: any) {
   })
 }
 
-// Get boot info (includes all DocTypes + ERPNext metadata)
+// ============================================================================
+// Document Mutation Hooks - Using Desk API
+// ============================================================================
+
+/**
+ * Save document mutation (create or update)
+ * Uses Desk API for full validation and error handling
+ */
+export function useSaveDoc(doctype: string) {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async (data: { 
+      doc: any
+      action?: 'Save' | 'Submit' | 'Update' 
+    }): Promise<DocumentSaveResult> => {
+      const docToSave = {
+        doctype,
+        ...data.doc,
+        __unsaved: 1,
+      }
+      
+      // Mark as new if no name
+      if (!data.doc.name) {
+        docToSave.__islocal = 1
+      }
+      
+      return saveDocument(docToSave, data.action || 'Save')
+    },
+    onSuccess: (result) => {
+      if (result.success && result.doc) {
+        // Invalidate related queries
+        queryClient.invalidateQueries({ queryKey: ['list', doctype] })
+        queryClient.invalidateQueries({ queryKey: ['list-data'] })
+        
+        // Update the document cache
+        if (result.doc.name) {
+          queryClient.setQueryData(['doc', doctype, result.doc.name], result.doc)
+        }
+      }
+    }
+  })
+}
+
+/**
+ * Create document mutation (convenience wrapper)
+ * @deprecated Use useSaveDoc for full functionality
+ */
+export function useCreateDoc(doctype: string) {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async (data: any): Promise<DocumentSaveResult> => {
+      const docToSave = {
+        doctype,
+        ...data,
+        __islocal: 1,
+        __unsaved: 1,
+      }
+      
+      return saveDocument(docToSave, 'Save')
+    },
+    onSuccess: (result) => {
+      if (result.success) {
+        queryClient.invalidateQueries({ queryKey: ['list', doctype] })
+        queryClient.invalidateQueries({ queryKey: ['list-data'] })
+      }
+    }
+  })
+}
+
+/**
+ * Update document mutation (convenience wrapper)
+ * @deprecated Use useSaveDoc for full functionality
+ */
+export function useUpdateDoc(doctype: string, name: string) {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async (data: any): Promise<DocumentSaveResult> => {
+      const docToSave = {
+        doctype,
+        name,
+        ...data,
+        __unsaved: 1,
+      }
+      
+      return saveDocument(docToSave, 'Save')
+    },
+    onSuccess: (result) => {
+      if (result.success) {
+        queryClient.invalidateQueries({ queryKey: ['doc', doctype, name] })
+        queryClient.invalidateQueries({ queryKey: ['list', doctype] })
+        queryClient.invalidateQueries({ queryKey: ['list-data'] })
+      }
+    }
+  })
+}
+
+/**
+ * Delete document mutation
+ */
+export function useDeleteDoc(doctype: string) {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async (name: string) => {
+      return deleteDocument(doctype, name)
+    },
+    onSuccess: (result, name) => {
+      if (result.success) {
+        queryClient.invalidateQueries({ queryKey: ['list', doctype] })
+        queryClient.invalidateQueries({ queryKey: ['list-data'] })
+        queryClient.removeQueries({ queryKey: ['doc', doctype, name] })
+      }
+    }
+  })
+}
+
+// ============================================================================
+// Boot and Auth Hooks
+// ============================================================================
+
+/**
+ * Get boot info (includes all DocTypes + ERPNext metadata)
+ */
 export function useBoot() {
   return useQuery({
     queryKey: ['boot'],
@@ -94,7 +300,9 @@ export function useBoot() {
   })
 }
 
-// Get all DocTypes from boot info
+/**
+ * Get all DocTypes from boot info
+ */
 export function useAllDocTypes() {
   const { data: boot, isLoading, error } = useBoot()
   
@@ -105,7 +313,9 @@ export function useAllDocTypes() {
   }
 }
 
-// Get DocTypes grouped by module
+/**
+ * Get DocTypes grouped by module
+ */
 export function useDocTypesByModule() {
   const { data: doctypes, isLoading, error } = useAllDocTypes()
   
@@ -123,7 +333,7 @@ export function useDocTypesByModule() {
     const sorted = Object.keys(grouped)
       .sort()
       .reduce((acc, key) => {
-        acc[key] = grouped[key].sort((a, b) => a.name.localeCompare(b.name))
+        acc[key] = grouped[key].sort((a: any, b: any) => a.name.localeCompare(b.name))
         return acc
       }, {} as Record<string, any[]>)
     
@@ -133,7 +343,10 @@ export function useDocTypesByModule() {
   return { data: grouped, isLoading, error }
 }
 
-// Setup wizard hooks
+// ============================================================================
+// Setup Wizard Hooks
+// ============================================================================
+
 export function useSetupStages() {
   return useQuery({
     queryKey: ['setup-stages'],
@@ -155,35 +368,13 @@ export function useProcessSetup() {
   })
 }
 
-// Document mutations
-export function useCreateDoc(doctype: string) {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: async (data: any) => {
-      return db.createDoc(doctype, data)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['list', doctype] })
-    }
-  })
-}
+// ============================================================================
+// List Hooks - Using Desk API
+// ============================================================================
 
-export function useUpdateDoc(doctype: string, name: string) {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: async (data: any) => {
-      return db.updateDoc(doctype, name, data)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['doc', doctype, name] })
-      queryClient.invalidateQueries({ queryKey: ['list', doctype] })
-    }
-  })
-}
-
-// Enhanced list data hook using reportview API
+/**
+ * Enhanced list data hook using reportview API
+ */
 export function useListData(params: {
   doctype: string
   filters?: Record<string, any>
@@ -220,12 +411,14 @@ export function useListData(params: {
       return data
     },
     enabled: !!params.doctype && !!meta,  // Wait for meta to load
-    keepPreviousData: true,  // Smooth pagination
+    placeholderData: (previousData) => previousData,  // Smooth pagination (replaces keepPreviousData)
     staleTime: 30 * 1000,
   })
 }
 
-// Get list count for pagination
+/**
+ * Get list count for pagination
+ */
 export function useListCount(doctype: string, filters?: Record<string, any>) {
   return useQuery({
     queryKey: ['list-count', doctype, filters],
@@ -235,6 +428,8 @@ export function useListCount(doctype: string, filters?: Record<string, any>) {
   })
 }
 
-// Export workspace hooks
-export * from './workspace'
+// ============================================================================
+// Re-export workspace hooks
+// ============================================================================
 
+export * from './workspace'

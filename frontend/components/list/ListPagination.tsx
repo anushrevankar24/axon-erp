@@ -15,6 +15,8 @@ import {
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react"
+import { SPACING, TYPOGRAPHY, COMPONENTS } from "@/lib/design-system"
+import { cn } from "@/lib/utils"
 
 interface ListPaginationProps {
   currentPage: number
@@ -38,21 +40,21 @@ export function ListPagination({
   const pageSizes = [20, 50, 100, 500]
 
   return (
-    <div className="flex items-center justify-between px-3 py-2 border-t bg-white">
-      <div className="flex items-center gap-4">
+    <div className={cn("flex items-center justify-between border-t border-gray-200 bg-white", SPACING.containerPaddingX, "py-2.5")}>
+      <div className={cn("flex items-center", SPACING.sectionGap)}>
         {/* Page Size Selector */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Rows</span>
+        <div className={cn("flex items-center", SPACING.elementGap)}>
+          <span className={TYPOGRAPHY.caption}>Rows</span>
           <Select
             value={`${pageSize}`}
             onValueChange={(value) => onPageSizeChange(Number(value))}
           >
-            <SelectTrigger className="h-6 w-[60px] text-xs">
+            <SelectTrigger className={cn(COMPONENTS.selectHeight, "w-[60px]", TYPOGRAPHY.body)}>
               <SelectValue placeholder={pageSize} />
             </SelectTrigger>
             <SelectContent side="top">
               {pageSizes.map((size) => (
-                <SelectItem key={size} value={`${size}`} className="text-xs">
+                <SelectItem key={size} value={`${size}`} className={TYPOGRAPHY.caption}>
                   {size}
                 </SelectItem>
               ))}
@@ -61,17 +63,17 @@ export function ListPagination({
         </div>
 
         {/* Page Info */}
-        <div className="text-xs text-muted-foreground">
+        <div className={TYPOGRAPHY.caption}>
           Page {currentPage} of {totalPages}
         </div>
       </div>
 
       {/* Navigation Buttons */}
-      <div className="flex items-center gap-1">
+      <div className={cn("flex items-center", SPACING.elementGap)}>
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
+          className={cn(COMPONENTS.buttonHeight, "w-8")}
           onClick={() => onPageChange(1)}
           disabled={!canPreviousPage}
         >
@@ -80,7 +82,7 @@ export function ListPagination({
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
+          className={cn(COMPONENTS.buttonHeight, "w-8")}
           onClick={() => onPageChange(currentPage - 1)}
           disabled={!canPreviousPage}
         >
@@ -89,7 +91,7 @@ export function ListPagination({
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
+          className={cn(COMPONENTS.buttonHeight, "w-8")}
           onClick={() => onPageChange(currentPage + 1)}
           disabled={!canNextPage}
         >
@@ -98,7 +100,7 @@ export function ListPagination({
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
+          className={cn(COMPONENTS.buttonHeight, "w-8")}
           onClick={() => onPageChange(totalPages)}
           disabled={!canNextPage}
         >

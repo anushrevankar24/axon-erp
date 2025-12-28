@@ -5,6 +5,12 @@ import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * ScrollArea Component - ERPNext Style
+ * 
+ * Uses thin 6px scrollbars with transparent track for minimal visual presence.
+ * Follows ERPNext's scrollbar.scss pattern.
+ */
 function ScrollArea({
   className,
   children,
@@ -38,18 +44,22 @@ function ScrollBar({
       data-slot="scroll-area-scrollbar"
       orientation={orientation}
       className={cn(
-        "flex touch-none p-px transition-colors select-none",
-        orientation === "vertical" &&
-          "h-full w-2.5 border-l border-l-transparent",
-        orientation === "horizontal" &&
-          "h-2.5 flex-col border-t border-t-transparent",
+        "flex touch-none select-none transition-opacity duration-150",
+        // ERPNext style: 6px thin scrollbar
+        orientation === "vertical" && "h-full w-1.5 p-px",
+        orientation === "horizontal" && "h-1.5 flex-col p-px",
         className
       )}
       {...props}
     >
       <ScrollAreaPrimitive.ScrollAreaThumb
         data-slot="scroll-area-thumb"
-        className="bg-border relative flex-1 rounded-full"
+        className={cn(
+          "relative flex-1 rounded-full",
+          // ERPNext scrollbar colors: semi-transparent, subtle
+          "bg-[var(--scrollbar-thumb)] hover:bg-[var(--scrollbar-thumb-hover)]",
+          "transition-colors duration-150"
+        )}
       />
     </ScrollAreaPrimitive.ScrollAreaScrollbar>
   )

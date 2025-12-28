@@ -63,9 +63,9 @@ export function DocumentLayout({ doctype, id }: DocumentLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="flex-1 w-full bg-gray-50 flex flex-col">
       {/* Document Title Bar - Like ERPNext */}
-      <div className="border-b bg-white px-4 py-3 flex items-center justify-between">
+      <div className="border-b bg-white px-4 py-3 flex items-center justify-between sticky top-[var(--header-height)] z-10">
         {/* Left: Hamburger + Document Name */}
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -170,11 +170,11 @@ export function DocumentLayout({ doctype, id }: DocumentLayoutProps) {
         <FormDashboard doctype={doctype} docname={id} />
       )}
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Form Content */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="px-6 py-4">
+      {/* Main Content Area - No nested scroll, body handles scrolling */}
+      <div className="flex-1 flex min-h-0">
+        {/* Form Content - flows naturally */}
+        <div className="flex-1 w-full">
+          <div className="px-4 py-3 max-w-7xl mx-auto">
             <DynamicForm 
               doctype={doctype} 
               id={id}

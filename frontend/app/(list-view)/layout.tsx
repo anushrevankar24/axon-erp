@@ -4,7 +4,7 @@ export default function ListViewLayoutWrapper({
   children: React.ReactNode
 }) {
   return (
-    <div className="h-screen overflow-hidden bg-background">
+    <div className="min-h-screen flex flex-col bg-background">
       {children}
     </div>
   )

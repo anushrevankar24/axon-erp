@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { useBoot } from '@/lib/api/hooks'
-import { getWorkspaceForDocType, findWorkspace } from '@/lib/utils/workspace'
+import { getWorkspaceForDocType, findWorkspace, slugify, unslugify } from '@/lib/utils/workspace'
 
 /**
  * Breadcrumb Component
@@ -40,12 +40,40 @@ export function Breadcrumbs() {
       return items
     }
     
-    // Pattern 2: /app/{workspace}
+    // Pattern 2: /app/{workspace-slug} or /app/{doctype-slug}
     if (segment1 && !segment2) {
-      const workspace = findWorkspace(boot.allowed_workspaces || [], segment1)
+      // Check if it's a workspace (using slug)
+      const workspace = boot.allowed_workspaces?.find(
+        (ws: any) => slugify(ws.name) === segment1
+      )
+      
       if (workspace) {
         items.push({
           label: workspace.title,
+          href: `/app/${segment1}`,
+          isLast: true
+        })
+        return items
+      }
+      
+      // Otherwise it's a DocType list
+      const doctype = unslugify(segment1, boot)
+      if (doctype) {
+        // Resolve workspace from DocType's module
+        const workspaceName = getWorkspaceForDocType(doctype, boot)
+        if (workspaceName) {
+          const ws = findWorkspace(boot.allowed_workspaces || [], workspaceName)
+          if (ws) {
+            items.push({
+              label: ws.title,
+              href: `/app/${slugify(ws.name)}`,
+              isLast: false
+            })
+          }
+        }
+        
+        items.push({
+          label: doctype,
           href: `/app/${segment1}`,
           isLast: true
         })
@@ -53,15 +81,27 @@ export function Breadcrumbs() {
       return items
     }
     
-    // Pattern 3: /app/{doctype} or /app/{workspace}/{doctype}
+    // Pattern 3: /app/{doctype-slug}/{id}
     if (segment2) {
-      // Check if segment1 is workspace or doctype
-      const possibleWorkspace = findWorkspace(boot.allowed_workspaces || [], segment1)
+      // Convert slug to DocType
+      const doctype = unslugify(segment1, boot)
       
-      if (possibleWorkspace) {
-        // Route: /app/{workspace}/{doctype}/[id]
+      if (doctype) {
+        // Resolve workspace from DocType's module
+        const workspaceName = getWorkspaceForDocType(doctype, boot)
+        if (workspaceName) {
+          const workspace = findWorkspace(boot.allowed_workspaces || [], workspaceName)
+          if (workspace) {
+            items.push({
+              label: workspace.title,
+              href: `/app/${slugify(workspace.name)}`,
+              isLast: false
+            })
+          }
+        }
+        
         items.push({
-          label: possibleWorkspace.title,
+          label: doctype,
           href: `/app/${segment1}`,
           isLast: false
         })
@@ -69,45 +109,8 @@ export function Breadcrumbs() {
         items.push({
           label: decodeURIComponent(segment2),
           href: `/app/${segment1}/${segment2}`,
-          isLast: !segment3
+          isLast: true
         })
-        
-        if (segment3) {
-          items.push({
-            label: decodeURIComponent(segment3),
-            href: `/app/${segment1}/${segment2}/${segment3}`,
-            isLast: true
-          })
-        }
-      } else {
-        // Route: /app/{doctype}/{id}
-        // Resolve workspace from DocType's module
-        const workspaceName = getWorkspaceForDocType(segment1, boot)
-        
-        if (workspaceName) {
-          const workspace = findWorkspace(boot.allowed_workspaces || [], workspaceName)
-          if (workspace) {
-            items.push({
-              label: workspace.title,
-              href: `/app/${workspace.name}`,
-              isLast: false
-            })
-          }
-        }
-        
-        items.push({
-          label: decodeURIComponent(segment1),
-          href: `/app/${segment1}`,
-          isLast: !segment2
-        })
-        
-        if (segment2) {
-          items.push({
-            label: decodeURIComponent(segment2),
-            href: `/app/${segment1}/${segment2}`,
-            isLast: true
-          })
-        }
       }
     }
     

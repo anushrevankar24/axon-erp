@@ -1,4 +1,3 @@
-import { WorkspaceSidebar } from '@/components/layout/WorkspaceSidebar'
 import { UnifiedHeader } from '@/components/layout/UnifiedHeader'
 import { WorkspaceErrorBoundary } from '@/components/workspace/ErrorBoundary'
 
@@ -8,16 +7,14 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex h-screen overflow-hidden flex-col">
+    <div className="min-h-screen flex flex-col">
       <UnifiedHeader />
-      <div className="flex flex-1 overflow-hidden">
-        <WorkspaceSidebar />
-        <main className="flex-1 overflow-auto p-6 bg-gray-50">
-          <WorkspaceErrorBoundary>
-            {children}
-          </WorkspaceErrorBoundary>
-        </main>
-      </div>
+      {/* Main content - body handles scrolling, no nested overflow */}
+      <main className="flex-1 flex">
+        <WorkspaceErrorBoundary>
+          {children}
+        </WorkspaceErrorBoundary>
+      </main>
     </div>
   )
 }

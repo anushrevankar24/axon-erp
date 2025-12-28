@@ -29,7 +29,7 @@ export function FormSidebar({ doctype, docname, doc }: FormSidebarProps) {
   if (!docname || docname === 'new') return null
 
   return (
-    <div className="w-64 border-l bg-muted/20 p-4 space-y-4 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+    <div className="w-64 border-l bg-muted/20 p-4 space-y-4 sticky top-[calc(var(--header-height)+52px)] h-fit max-h-[calc(100vh-var(--header-height)-60px)] overflow-y-auto scrollbar-sidebar">
       {/* Assigned To */}
       <SidebarSection
         icon={<UserPlus className="h-4 w-4" />}
