@@ -21,6 +21,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
  * Uses useBoot() which calls axon_erp.api.get_boot()
  * This wraps frappe.sessions.get() - same data ERPNext frontend gets
  * 
+ * Note: The wrapper is required because frappe.sessions.get() is an internal
+ * function, not a whitelisted API. ERPNext's UI gets boot data embedded in HTML
+ * during server-side rendering, but separate frontends need an API endpoint.
+ * 
  * Pattern from: frappe/desk.js Application.load_bootinfo()
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {

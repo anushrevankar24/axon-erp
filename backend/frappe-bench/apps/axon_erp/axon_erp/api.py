@@ -12,48 +12,20 @@ import frappe
 @frappe.whitelist(allow_guest=True)
 def get_boot():
     """
-    Get boot info for custom frontend
+    Get boot session data for separate frontend
     
-    Wraps Frappe's existing frappe.sessions.get() function and adds all DocTypes.
-    This provides the same data ERPNext's own frontend receives on login.
+    This wrapper is REQUIRED because frappe.sessions.get() is an internal function,
+    not a whitelisted API endpoint. ERPNext's own UI gets boot data embedded in HTML
+    during server-side rendering, but separate frontends need an API endpoint.
     
-    Note: allow_guest=True allows unauthenticated calls (returns Guest boot)
-    This is needed for separate frontend architecture where app loads before login check
+    Security: Relies entirely on Frappe's internal security - no custom logic added.
+    Pattern: Standard approach for Frappe mobile apps and third-party integrations.
     
-    Returns:
-        dict: Boot info including:
-            - user: Current user info
-            - modules: All modules
-            - permissions: User permissions
-            - all_doctypes: All DocTypes (our addition for navigation)
-            - And 70+ other fields from ERPNext
+    Note: allow_guest=True is required for initial page load before authentication.
+    Guest users get minimal boot data (handled by frappe.sessions.get() internally).
     """
-    # If Guest user (not logged in), return minimal boot
-    # No CSRF token required for Guest users
-    if frappe.session.user == 'Guest':
-        return {
-            'user': 'Guest',
-            'all_doctypes': [],
-            'modules': {},
-            'message': 'Guest session - please login'
-        }
-    
-    # Get standard boot info from Frappe (same data ERPNext UI gets)
+    # Call Frappe's internal sessions.get() - this is safe as it's server-side
     boot = frappe.sessions.get()
-    
-    # Add all DocTypes for sidebar navigation
-    # Using frappe.get_all() which bypasses the 20-item REST API limit
-    boot['all_doctypes'] = frappe.get_all(
-        'DocType',
-        filters={
-            'istable': 0,  # Exclude child tables
-            'issingle': 0   # Exclude single DocTypes (Settings pages)
-        },
-        fields=['name', 'module', 'icon', 'custom'],
-        order_by='name',
-        limit=0  # No limit - fetch all DocTypes
-    )
-    
     return boot
 
 

@@ -20,6 +20,7 @@ import {
   deleteDocument,
   type DocumentSaveResult 
 } from './document'
+import { DocTypeMeta, DocInfo } from '@/lib/types/metadata'
 
 // ============================================================================
 // DocType Metadata Hooks
@@ -68,6 +69,57 @@ export function useMetaBundle(doctype: string) {
     },
     enabled: !!doctype,
     staleTime: 5 * 60 * 1000,
+    retry: 1,
+  })
+}
+
+/**
+ * Fetch DocType metadata using Frappe's production endpoint
+ * Returns complete meta with permissions, workflows, custom scripts
+ */
+export function useDocTypeMeta(doctype: string) {
+  return useQuery({
+    queryKey: ['doctype_meta', doctype],
+    queryFn: async () => {
+      const result = await call('frappe.desk.form.load.getdoctype', {
+        doctype: doctype
+      })
+      
+      if (!result.docs || result.docs.length === 0) {
+        throw new Error(`No metadata returned for ${doctype}`)
+      }
+      
+      // result.docs[0] is the main DocType meta
+      // result.docs[1+] are child table metas
+      return {
+        meta: result.docs[0] as DocTypeMeta,
+        childMetas: result.docs.slice(1),
+        user_settings: result.user_settings
+      }
+    },
+    enabled: !!doctype,
+    staleTime: 30 * 60 * 1000,  // 30 minutes - metadata doesn't change often
+    retry: 1,
+  })
+}
+
+/**
+ * Get document-specific permissions and info
+ * This returns permissions calculated for the specific document
+ * (considers owner, user permissions, workflow state)
+ */
+export function useDocInfo(doctype: string, name?: string) {
+  return useQuery({
+    queryKey: ['docinfo', doctype, name],
+    queryFn: async () => {
+      const result = await call('frappe.desk.form.load.get_docinfo', {
+        doctype,
+        name
+      })
+      return result.message as DocInfo
+    },
+    enabled: !!(doctype && name && name !== 'new'),
+    staleTime: 0,  // Don't cache - permissions can change
     retry: 1,
   })
 }
@@ -271,28 +323,21 @@ export function useDeleteDoc(doctype: string) {
 // ============================================================================
 
 /**
- * Get boot info (includes all DocTypes + ERPNext metadata)
+ * Get boot info - Uses wrapper around Frappe's internal sessions.get()
+ * 
+ * Note: frappe.sessions.get is NOT a whitelisted API endpoint (it's internal),
+ * so we need a wrapper. ERPNext's UI gets boot data embedded in HTML server-side,
+ * but separate frontends need an API endpoint.
+ * 
+ * This is the standard pattern for Frappe mobile apps and third-party integrations.
  */
 export function useBoot() {
   return useQuery({
     queryKey: ['boot'],
     queryFn: async () => {
-      try {
-        const result = await call('axon_erp.api.get_boot')
-        const boot = result.message || result
-        return boot
-      } catch (error) {
-        // If not authenticated, return empty boot (expected behavior)
-        const status = (error as any)?.response?.status
-        if (status === 401 || status === 403) {
-          return {
-            all_doctypes: [],
-            user: 'Guest',
-            modules: {}
-          }
-        }
-        throw error
-      }
+      // Call our wrapper which internally calls frappe.sessions.get()
+      const result = await call('axon_erp.api.get_boot')
+      return result.message || result
     },
     staleTime: 10 * 60 * 1000,  // Cache for 10 minutes
     refetchOnWindowFocus: false,
@@ -301,29 +346,41 @@ export function useBoot() {
 }
 
 /**
- * Get all DocTypes from boot info
+ * Get all DocTypes - Separate independent query
+ * Uses Frappe's standard get_list endpoint
  */
 export function useAllDocTypes() {
-  const { data: boot, isLoading, error } = useBoot()
-  
-  return {
-    data: boot?.all_doctypes || [],
-    isLoading,
-    error
-  }
+  return useQuery({
+    queryKey: ['all_doctypes'],
+    queryFn: async () => {
+      // Use Frappe's standard get_list endpoint
+      const result = await call('frappe.client.get_list', {
+        doctype: 'DocType',
+        filters: [
+          ['istable', '=', 0],
+          ['issingle', '=', 0]
+        ],
+        fields: ['name', 'module', 'icon', 'custom'],
+        limit_page_length: 0
+      })
+      return result.message
+    },
+    staleTime: 30 * 60 * 1000,  // Cache longer - doesn't change often
+    enabled: true,
+  })
 }
 
 /**
  * Get DocTypes grouped by module
  */
 export function useDocTypesByModule() {
-  const { data: doctypes, isLoading, error } = useAllDocTypes()
+  const { data, isLoading, error } = useAllDocTypes()
   
   const grouped = useMemo(() => {
-    if (!doctypes || doctypes.length === 0) return {}
+    if (!data || data.length === 0) return {}
     
     const grouped: Record<string, any[]> = {}
-    doctypes.forEach((dt: any) => {
+    data.forEach((dt: any) => {
       const module = dt.module || 'Other'
       if (!grouped[module]) grouped[module] = []
       grouped[module].push(dt)
@@ -338,7 +395,7 @@ export function useDocTypesByModule() {
       }, {} as Record<string, any[]>)
     
     return sorted
-  }, [doctypes])
+  }, [data])
   
   return { data: grouped, isLoading, error }
 }

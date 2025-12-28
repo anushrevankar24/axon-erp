@@ -27,6 +27,7 @@ interface ListToolbarProps {
   pageSize: number
   onRefresh: () => void
   onBulkDelete?: () => void
+  canCreate?: boolean
 }
 
 export function ListToolbar({
@@ -39,7 +40,8 @@ export function ListToolbar({
   currentPage,
   pageSize,
   onRefresh,
-  onBulkDelete
+  onBulkDelete,
+  canCreate = true
 }: ListToolbarProps) {
   const router = useRouter()
   const [debouncedSearch, setDebouncedSearch] = React.useState(searchText)
@@ -108,15 +110,17 @@ export function ListToolbar({
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
 
-          {/* Add New */}
-          <Button 
-            size="sm"
-            className={cn(COMPONENTS.buttonHeight, TYPOGRAPHY.caption)}
-            onClick={() => router.push(`/app/${slugify(doctype)}/new`)}
-          >
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            Add {doctype}
-          </Button>
+          {/* Add New - Only show if user has create permission */}
+          {canCreate && (
+            <Button 
+              size="sm"
+              className={cn(COMPONENTS.buttonHeight, TYPOGRAPHY.caption)}
+              onClick={() => router.push(`/app/${slugify(doctype)}/new`)}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Add {doctype}
+            </Button>
+          )}
         </div>
       </div>
     </div>

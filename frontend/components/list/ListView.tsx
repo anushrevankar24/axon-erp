@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useParams } from "next/navigation"
 import { useMeta, useListData, useListCount } from "@/lib/api/hooks"
+import { usePermissions } from "@/lib/auth/usePermissions"
 import { FilterSidebar } from "./FilterSidebar"
 import { StandardFiltersBar } from "./StandardFiltersBar"
 import { ListToolbar } from "./ListToolbar"
@@ -20,6 +21,9 @@ interface ListViewProps {
 export function ListView({ doctype }: ListViewProps) {
   const params = useParams()
   const workspace = params.workspace ? decodeURIComponent(params.workspace as string) : ''
+  
+  // Check permissions
+  const { canCreate, canDelete } = usePermissions()
   
   // State management
   const [filters, setFilters] = React.useState<Record<string, any>>({})
@@ -137,6 +141,11 @@ export function ListView({ doctype }: ListViewProps) {
   }
 
   const handleBulkDelete = () => {
+    // Check permission before allowing delete
+    if (!canDelete(doctype)) {
+      console.warn('No delete permission for', doctype)
+      return
+    }
     // TODO: Implement bulk delete
     console.log("Delete selected:", selectedRows)
   }
@@ -178,7 +187,8 @@ export function ListView({ doctype }: ListViewProps) {
           currentPage={currentPage}
           pageSize={pageSize}
           onRefresh={refetch}
-          onBulkDelete={selectedRows.length > 0 ? handleBulkDelete : undefined}
+          onBulkDelete={selectedRows.length > 0 && canDelete(doctype) ? handleBulkDelete : undefined}
+          canCreate={canCreate(doctype)}
         />
 
         {/* Data Table - horizontal scroll only when needed */}

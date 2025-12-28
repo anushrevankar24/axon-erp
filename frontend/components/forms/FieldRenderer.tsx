@@ -19,6 +19,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { LinkField } from './LinkField'
 import { ChildTable } from './ChildTable'
 import { cn } from '@/lib/utils'
+import { useFieldPermissions } from '@/lib/hooks/useFieldPermissions'
+import { DocTypeMeta } from '@/lib/types/metadata'
 
 // ============================================================================
 // Types
@@ -40,6 +42,8 @@ interface FieldMeta {
 interface FieldRendererProps {
   field: FieldMeta
   form: any // UseFormReturn from react-hook-form
+  doc: any  // Current document
+  meta?: DocTypeMeta  // DocType metadata
 }
 
 // ============================================================================
@@ -92,13 +96,23 @@ function formatDatetimeForInput(value: string | null | undefined): string {
 // Main Component
 // ============================================================================
 
-export function FieldRenderer({ field, form }: FieldRendererProps) {
+export function FieldRenderer({ field, form, doc, meta }: FieldRendererProps) {
   const fieldName = field.fieldname
+  const { getFieldStatus } = useFieldPermissions(meta, doc)
+  const fieldStatus = getFieldStatus(fieldName)
   
-  // Skip hidden fields and breaks
-  if (field.hidden || ['Section Break', 'Column Break', 'HTML', 'Tab Break'].includes(field.fieldtype)) {
+  // Hide if no permission
+  if (fieldStatus === 'None') {
     return null
   }
+  
+  // Skip breaks
+  if (['Section Break', 'Column Break', 'HTML', 'Tab Break'].includes(field.fieldtype)) {
+    return null
+  }
+  
+  // Determine if field should be read-only
+  const isReadOnly = fieldStatus === 'Read' || field.read_only
   
   // Get error state from form
   const errorState = form.formState.errors[fieldName]
@@ -119,7 +133,7 @@ export function FieldRenderer({ field, form }: FieldRendererProps) {
             aria-describedby={hasError ? `${fieldName}-error` : undefined}
           >
             <FormControl>
-              {renderFieldInput(field, formField, form, hasError)}
+              {renderFieldInput(field, formField, form, hasError, isReadOnly)}
             </FormControl>
             
             {/* Show inline error message or field description */}
@@ -160,7 +174,7 @@ export function FieldRenderer({ field, form }: FieldRendererProps) {
             {field.label}
           </FormLabel>
           <FormControl>
-            {renderFieldInput(field, formField, form, hasError)}
+            {renderFieldInput(field, formField, form, hasError, isReadOnly)}
           </FormControl>
           
           {/* Show inline error message or field description */}
@@ -185,7 +199,7 @@ export function FieldRenderer({ field, form }: FieldRendererProps) {
 // Field Input Renderer
 // ============================================================================
 
-function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError?: boolean) {
+function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError?: boolean, isReadOnly?: boolean) {
   // Common input class with error state
   const inputClass = cn(
     "h-8 text-sm",
@@ -203,6 +217,7 @@ function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError
           className={inputClass} 
           {...formField} 
           value={formField.value || ''} 
+          disabled={isReadOnly}
         />
       )
     
@@ -214,6 +229,7 @@ function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError
           className={inputClass} 
           {...formField} 
           value={formField.value ?? ''} 
+          disabled={isReadOnly}
           onChange={(e) => {
             const val = e.target.value
             formField.onChange(val === '' ? null : parseInt(val, 10))
@@ -230,6 +246,7 @@ function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError
           className={inputClass} 
           {...formField} 
           value={formField.value ?? ''} 
+          disabled={isReadOnly}
           onChange={(e) => {
             const val = e.target.value
             formField.onChange(val === '' ? null : parseFloat(val))
@@ -249,6 +266,7 @@ function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError
             className={cn(inputClass, "pl-8")} 
             {...formField} 
             value={formField.value ?? ''} 
+            disabled={isReadOnly}
             onChange={(e) => {
               const val = e.target.value
               formField.onChange(val === '' ? null : parseFloat(val))
@@ -269,6 +287,7 @@ function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError
           )} 
           {...formField} 
           value={formField.value || ''} 
+          disabled={isReadOnly}
         />
       )
     
@@ -279,6 +298,7 @@ function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError
           className={inputClass} 
           {...formField} 
           value={formField.value || ''} 
+          disabled={isReadOnly}
         />
       )
     
@@ -289,6 +309,7 @@ function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError
           className={inputClass} 
           {...formField} 
           value={formatDatetimeForInput(formField.value)} 
+          disabled={isReadOnly}
           onChange={(e) => {
             // Convert back to Frappe format (space separator)
             const val = e.target.value
@@ -305,6 +326,7 @@ function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError
           className={inputClass} 
           {...formField} 
           value={formatTimeForInput(formField.value)} 
+          disabled={isReadOnly}
           onChange={(e) => {
             formField.onChange(e.target.value)
           }}
@@ -316,6 +338,7 @@ function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError
         <div className="flex items-center space-x-2 pt-2">
           <Checkbox
             checked={formField.value === 1 || formField.value === true}
+            disabled={isReadOnly}
             onCheckedChange={(checked) => formField.onChange(checked ? 1 : 0)}
             className={cn("h-4 w-4", hasError && "border-red-500")}
           />
@@ -334,7 +357,7 @@ function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError
       const options = field.options?.split('\n').filter((opt: string) => opt.trim() !== '') || []
       
       return (
-        <Select value={formField.value || ''} onValueChange={formField.onChange}>
+        <Select value={formField.value || ''} onValueChange={formField.onChange} disabled={isReadOnly}>
           <SelectTrigger className={cn(inputClass, hasError && "border-red-500")}>
             <SelectValue placeholder={`Select ${field.label}`} />
           </SelectTrigger>
@@ -355,7 +378,7 @@ function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError
           onChange={formField.onChange}
           doctype={field.options || ''}
           placeholder={`Select ${field.options}`}
-          disabled={field.read_only === 1}
+          disabled={isReadOnly || field.read_only === 1}
           hasError={hasError}
         />
       )
@@ -366,7 +389,7 @@ function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError
           value={formField.value || []}
           onChange={formField.onChange}
           doctype={field.options || ''}
-          disabled={field.read_only === 1}
+          disabled={isReadOnly || field.read_only === 1}
           parentForm={form}
         />
       )

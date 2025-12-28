@@ -19,12 +19,12 @@ export function usePermissions() {
    * Check if user has permission for a doctype
    * 
    * @param doctype - DocType name (e.g., "Sales Order")
-   * @param ptype - Permission type: "read" | "write" | "create" | "delete"
+   * @param ptype - Permission type
    * @returns boolean - true if user has permission
    */
   const has_perm = (
     doctype: string, 
-    ptype: 'read' | 'write' | 'create' | 'delete' = 'read'
+    ptype: 'read' | 'write' | 'create' | 'delete' | 'submit' | 'cancel' | 'print' | 'email' | 'import' | 'export' = 'read'
   ): boolean => {
     if (!boot?.user || boot.user === 'Guest') {
       return false
@@ -45,6 +45,18 @@ export function usePermissions() {
         return boot.user.can_create?.includes(doctype) || false
       case 'delete':
         return boot.user.can_delete?.includes(doctype) || false
+      case 'submit':
+        return boot.user.can_submit?.includes(doctype) || false
+      case 'cancel':
+        return boot.user.can_cancel?.includes(doctype) || false
+      case 'print':
+        return boot.user.can_print?.includes(doctype) || false
+      case 'email':
+        return boot.user.can_email?.includes(doctype) || false
+      case 'import':
+        return boot.user.can_import?.includes(doctype) || false
+      case 'export':
+        return boot.user.can_export?.includes(doctype) || false
       default:
         return false
     }
@@ -55,6 +67,10 @@ export function usePermissions() {
   const canRead = (doctype: string) => has_perm(doctype, 'read')
   const canWrite = (doctype: string) => has_perm(doctype, 'write')
   const canDelete = (doctype: string) => has_perm(doctype, 'delete')
+  const canSubmit = (doctype: string) => has_perm(doctype, 'submit')
+  const canCancel = (doctype: string) => has_perm(doctype, 'cancel')
+  const canPrint = (doctype: string) => has_perm(doctype, 'print')
+  const canEmail = (doctype: string) => has_perm(doctype, 'email')
   
   return {
     has_perm,
@@ -62,6 +78,10 @@ export function usePermissions() {
     canRead,
     canWrite,
     canDelete,
+    canSubmit,
+    canCancel,
+    canPrint,
+    canEmail,
   }
 }
 
