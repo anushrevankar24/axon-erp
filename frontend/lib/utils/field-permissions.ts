@@ -96,6 +96,12 @@ export function getFieldDisplayStatus(
   // Apply field-level overrides
   if (field.hidden) status = 'None'
   
+  // ERPNext pattern: Check doc existence BEFORE accessing properties
+  // Source: frappe/public/js/frappe/model/perm.js line 226
+  if (!doc) {
+    return status  // Return permission-based status if no doc yet
+  }
+  
   // For new documents, skip document-status checks
   if (doc.__islocal) {
     return status
@@ -122,7 +128,14 @@ export function getFieldDisplayStatus(
 
 /**
  * Check if field should be hidden based on depends_on
- * This is a simplified version - full implementation would evaluate JS expressions
+ * 
+ * Replicates ERPNext's logic from:
+ * - frappe/public/js/frappe/ui/form/layout.js: evaluate_depends_on_value()
+ * 
+ * Supports:
+ * - Simple field check: "enabled"
+ * - eval expressions: "eval:doc.field == 'value'"
+ * - Complex conditions: "eval:doc.field1 && doc.field2"
  */
 export function evaluateDependsOn(
   field: DocField,
@@ -130,20 +143,48 @@ export function evaluateDependsOn(
 ): boolean {
   if (!field.depends_on) return false
   
-  // Simple evaluation: "eval:doc.fieldname"
+  // Handle eval: expressions
   if (field.depends_on.startsWith('eval:')) {
-    const condition = field.depends_on.replace('eval:', '')
+    const expression = field.depends_on.replace('eval:', '')
     try {
-      // Very basic evaluation - production would use safer parser
-      // eslint-disable-next-line no-eval
-      return !eval(condition.replace('doc.', 'doc?.'))
-    } catch {
-      return false
+      // Create evaluation context with helper functions
+      const context = {
+        doc: doc || {},
+        // Add ERPNext helper functions used in depends_on
+        in_list: (list: any[], value: any) => Array.isArray(list) && list.includes(value),
+        cint: (value: any) => parseInt(value) || 0,
+        flt: (value: any) => parseFloat(value) || 0,
+        // Add more as needed
+      }
+      
+      // Safe evaluation using Function constructor (safer than eval)
+      const evalFunc = new Function('doc', 'in_list', 'cint', 'flt', `
+        try {
+          return ${expression}
+        } catch (e) {
+          console.warn('depends_on evaluation failed:', '${expression}', e);
+          return true; // Show field on error
+        }
+      `)
+      
+      const result = evalFunc(context.doc, context.in_list, context.cint, context.flt)
+      return !result  // Return true to HIDE field
+    } catch (e) {
+      console.warn('Failed to evaluate depends_on:', expression, e)
+      return false  // Show field if evaluation fails
     }
   }
   
   // Simple field check: "fieldname"
+  // Check if field has truthy value
   const value = doc[field.depends_on]
-  return !value
+  
+  // ERPNext logic: field is hidden if depends_on value is falsy
+  // But consider 0 as falsy, null/undefined as falsy
+  if (value === null || value === undefined || value === '' || value === 0 || value === false) {
+    return true  // Hide field
+  }
+  
+  return false  // Show field
 }
 

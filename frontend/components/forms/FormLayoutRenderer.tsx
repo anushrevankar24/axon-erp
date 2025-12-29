@@ -6,10 +6,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { FieldRenderer } from './FieldRenderer'
+import { evaluateDependsOnValue } from '@/lib/utils/evaluate-depends-on'
 
 interface Section {
+  fieldname?: string
   label?: string
+  depends_on?: string
+  hidden?: number
   collapsible?: boolean
+  collapsible_depends_on?: string
   collapsed?: boolean
   columns: Field[][]
 }
@@ -35,55 +40,90 @@ interface Field {
 interface FormLayoutRendererProps {
   fields: Field[]
   form: any
+  doc?: any
+  meta?: any
 }
 
-export function FormLayoutRenderer({ fields, form }: FormLayoutRendererProps) {
+export function FormLayoutRenderer({ fields, form, doc, meta }: FormLayoutRendererProps) {
   // Parse fields into tabs (3-level hierarchy: Tab → Section → Column)
-  const tabs = parseFieldsIntoTabs(fields)
+  const tabs = React.useMemo(() => parseFieldsIntoTabs(fields), [fields])
+  
+  // Evaluate section visibility based on depends_on
+  // Replicates ERPNext's refresh_dependency() - layout.js lines 693-745
+  const tabsWithVisibility = React.useMemo(() => {
+    return tabs.map(tab => ({
+      ...tab,
+      sections: tab.sections.map(section => {
+        // Evaluate depends_on for this section
+        let hidden_due_to_dependency = false
+        
+        if (section.depends_on) {
+          // Use ERPNext's exact evaluation logic
+          const guardianHasValue = evaluateDependsOnValue(section.depends_on, doc)
+          hidden_due_to_dependency = !guardianHasValue
+        }
+        
+        return {
+          ...section,
+          hidden_due_to_dependency,
+          // Final hidden state: explicit hidden OR depends_on hidden
+          isHidden: section.hidden === 1 || hidden_due_to_dependency
+        }
+      })
+    }))
+  }, [tabs, doc])  // Re-run when doc changes (React's equivalent to ERPNext's refresh)
   
   // Safety check - ensure we have at least one tab
-  if (tabs.length === 0) {
+  if (tabsWithVisibility.length === 0) {
     return <div className="p-4 text-muted-foreground text-sm">No fields to display</div>
   }
   
   // If only one tab (no Tab Breaks), render without tabs UI
-  if (tabs.length === 1) {
+  if (tabsWithVisibility.length === 1) {
     return (
       <div className="space-y-3">
-        {tabs[0].sections.map((section, sectionIndex) => (
-          <FormSection
-            key={sectionIndex}
-            section={section}
-            sectionIndex={sectionIndex}
-            form={form}
-          />
-        ))}
+        {tabsWithVisibility[0].sections.map((section, sectionIndex) => 
+          !section.isHidden && (
+            <FormSection
+              key={sectionIndex}
+              section={section}
+              sectionIndex={sectionIndex}
+              form={form}
+              doc={doc}
+              meta={meta}
+            />
+          )
+        )}
       </div>
     )
   }
   
   // Multiple tabs - render with tabs UI
   return (
-    <Tabs defaultValue={tabs[0].fieldname || '0'} className="w-full">
+    <Tabs defaultValue={tabsWithVisibility[0].fieldname || '0'} className="w-full">
       <TabsList>
-        {tabs.map((tab, index) => (
+        {tabsWithVisibility.map((tab, index) => (
           <TabsTrigger key={tab.fieldname || index} value={tab.fieldname || String(index)}>
             {tab.label}
           </TabsTrigger>
         ))}
       </TabsList>
       
-      {tabs.map((tab, index) => (
+      {tabsWithVisibility.map((tab, index) => (
         <TabsContent key={tab.fieldname || index} value={tab.fieldname || String(index)}>
           <div className="space-y-3">
-            {tab.sections.map((section, sectionIndex) => (
-              <FormSection
-                key={sectionIndex}
-                section={section}
-                sectionIndex={sectionIndex}
-                form={form}
-              />
-            ))}
+            {tab.sections.map((section, sectionIndex) => 
+              !section.isHidden && (
+                <FormSection
+                  key={sectionIndex}
+                  section={section}
+                  sectionIndex={sectionIndex}
+                  form={form}
+                  doc={doc}
+                  meta={meta}
+                />
+              )
+            )}
           </div>
         </TabsContent>
       ))}
@@ -131,10 +171,14 @@ function parseFieldsIntoTabs(fields: Field[]): Tab[] {
         currentTab.sections.push(currentSection)
       }
       
-      // Start new section
+      // Start new section - PRESERVE ALL METADATA (ERPNext pattern)
       currentSection = {
+        fieldname: field.fieldname,
         label: field.label,
+        depends_on: field.depends_on,
+        hidden: field.hidden,
         collapsible: field.collapsible === 1,
+        collapsible_depends_on: field.collapsible_depends_on,
         collapsed: !!field.collapsible_depends_on,
         columns: [[]]
       }
@@ -216,11 +260,15 @@ function optimizeColumns(columns: Field[][]): Field[][] {
 function FormSection({ 
   section, 
   sectionIndex, 
-  form 
+  form,
+  doc,
+  meta
 }: { 
   section: Section
   sectionIndex: number
-  form: any 
+  form: any
+  doc?: any
+  meta?: any
 }) {
   const [isOpen, setIsOpen] = React.useState(!section.collapsed)
   
@@ -245,6 +293,8 @@ function FormSection({
               key={field.fieldname}
               field={field}
               form={form}
+              doc={doc}
+              meta={meta}
             />
           ))}
         </div>

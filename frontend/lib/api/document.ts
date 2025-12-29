@@ -329,26 +329,24 @@ export async function runDocMethod(
 /**
  * Get a new document with default values
  * 
+ * Uses our custom API wrapper around frappe.new_doc() because:
+ * - frappe.client.get_new doesn't exist (not whitelisted)
+ * - frappe.model.get_new_doc() is client-side JS only (runs in Frappe context)
+ * - Our wrapper provides the same functionality via API
+ * 
  * @param doctype - DocType name
+ * @param withMandatoryChildren - Create empty rows for required child tables
  */
 export async function getNewDoc(
-  doctype: string
-): Promise<{ success: boolean; doc?: any; error?: FrappeError }> {
-  try {
-    const result = await call('frappe.client.get_new', {
-      doctype
-    })
+  doctype: string,
+  withMandatoryChildren: boolean = false
+): Promise<any> {
+  const result = await call('axon_erp.api.get_new_doc', {
+    doctype,
+    with_mandatory_children: withMandatoryChildren ? 1 : 0
+  })
 
-    return {
-      success: true,
-      doc: result.message || result
-    }
-  } catch (error: any) {
-    return {
-      success: false,
-      error: parseFrappeError(error)
-    }
-  }
+  return result.message || result
 }
 
 /**

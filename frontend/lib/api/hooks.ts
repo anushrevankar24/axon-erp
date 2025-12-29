@@ -18,6 +18,7 @@ import {
   getDocType, 
   saveDocument, 
   deleteDocument,
+  getNewDoc,
   type DocumentSaveResult 
 } from './document'
 import { DocTypeMeta, DocInfo } from '@/lib/types/metadata'
@@ -130,12 +131,19 @@ export function useDocInfo(doctype: string, name?: string) {
 
 /**
  * Fetch single document using Desk API
- * Returns document with docinfo (attachments, comments, versions, etc.)
+ * For new documents, calls get_new_doc to get defaults
  */
 export function useDoc(doctype: string, name?: string) {
   return useQuery({
     queryKey: ['doc', doctype, name],
     queryFn: async () => {
+      // Handle new documents
+      if (!name || name === 'new') {
+        const newDoc = await getNewDoc(doctype)
+        return newDoc
+      }
+      
+      // Handle existing documents
       const result = await getDocument(doctype, name!)
       
       if (!result.success) {
@@ -148,7 +156,7 @@ export function useDoc(doctype: string, name?: string) {
       
       return result.doc
     },
-    enabled: !!name && name !== 'new',
+    enabled: !!name,
     retry: 1,
   })
 }

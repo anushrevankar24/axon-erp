@@ -8,6 +8,7 @@ Only includes APIs that ERPNext doesn't expose or need customization
 """
 
 import frappe
+from frappe import _
 
 @frappe.whitelist(allow_guest=True)
 def get_boot():
@@ -50,6 +51,55 @@ def get_csrf_token():
     return {
         'csrf_token': frappe.local.session.data.csrf_token
     }
+
+
+@frappe.whitelist()
+def get_new_doc(doctype, with_mandatory_children=False):
+    """
+    Get a new document with all defaults applied.
+    
+    This is the official way to create new documents for external frontends.
+    Replicates what ERPNext's frappe.model.get_new_doc() does client-side.
+    
+    Uses frappe.new_doc() which handles:
+    - User-specific defaults from User Defaults
+    - Permission-filtered defaults
+    - Global system defaults
+    - Special values (Today, __user, Now, :User)
+    - Field-based defaults
+    - Select field first option defaults
+    
+    Based on:
+    - frappe/__init__.py: frappe.new_doc()
+    - frappe/model/create_new.py: get_new_doc(), make_new_doc()
+    - frappe/public/js/frappe/model/create_new.js: frappe.model.get_new_doc()
+    
+    Args:
+        doctype (str): DocType name
+        with_mandatory_children (bool): Create empty rows for required child tables
+    
+    Returns:
+        dict: New document with all defaults applied
+    """
+    # Check permissions
+    if not frappe.has_permission(doctype, "create"):
+        frappe.throw(_("No permission to create {0}").format(doctype), frappe.PermissionError)
+    
+    # Use Frappe's official function - handles ALL default value complexity
+    doc = frappe.new_doc(doctype)
+    
+    # Run onload methods (important for dynamic field setup, custom scripts)
+    doc.run_method('onload')
+    
+    # Optionally create mandatory child table rows
+    if with_mandatory_children:
+        meta = frappe.get_meta(doctype)
+        for df in meta.fields:
+            if df.fieldtype == "Table" and df.reqd:
+                doc.append(df.fieldname, {})
+    
+    # Return as dictionary
+    return doc.as_dict()
 
 
 # Future: Add your custom business logic APIs here

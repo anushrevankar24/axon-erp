@@ -308,7 +308,7 @@ export function DynamicForm({
           className="space-y-3"
           noValidate // We handle validation ourselves
         >
-          <FormLayoutRenderer fields={meta.fields || []} form={form} />
+          <FormLayoutRenderer fields={meta.fields || []} form={form} doc={doc} meta={meta} />
         </form>
       </Form>
     </div>
