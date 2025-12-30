@@ -36,6 +36,7 @@ export interface FieldMeta {
   reqd?: number | boolean
   read_only?: number | boolean
   hidden?: number | boolean
+  hidden_due_to_dependency?: number | boolean
   mandatory_depends_on?: string
   options?: string
   length?: number
@@ -109,11 +110,11 @@ export function checkMandatory(
     // Skip fields that don't hold data
     if (!isDataField(field.fieldtype)) continue
 
-    // Skip read-only and hidden fields
-    if (field.read_only || field.hidden) continue
+    // Skip read-only and hidden fields (including hidden due to dependency like Desk)
+    if (field.read_only || field.hidden || field.hidden_due_to_dependency) continue
 
-    // Check if field is mandatory
-    const isMandatory = isFieldMandatory(field, formData)
+    // Desk semantics: after dependency refresh, df.reqd already reflects mandatory_depends_on.
+    const isMandatory = !!field.reqd
 
     if (isMandatory && isNullOrEmpty(formData[field.fieldname])) {
       const error: ValidationError = {
@@ -139,7 +140,7 @@ export function checkMandatory(
     }
 
     // Check child tables
-    if (field.fieldtype === 'Table' && field.reqd) {
+    if (field.fieldtype === 'Table' && isMandatory) {
       const tableData = formData[field.fieldname]
       if (!tableData || !Array.isArray(tableData) || tableData.length === 0) {
         const error: ValidationError = {
@@ -185,73 +186,10 @@ export function checkMandatory(
   }
 }
 
-/**
- * Check if a field is mandatory
- * Handles reqd flag and mandatory_depends_on expressions
- */
-function isFieldMandatory(field: FieldMeta, doc: Record<string, any>): boolean {
-  // Simple reqd flag
-  if (field.reqd) return true
-
-  // Check mandatory_depends_on expression
-  if (!field.mandatory_depends_on) return false
-
-  const expression = field.mandatory_depends_on
-
-  // Boolean value
-  if (typeof expression === 'boolean') {
-    return expression
-  }
-
-  // Simple field reference (e.g., "is_active")
-  if (typeof expression === 'string' && !expression.startsWith('eval:')) {
-    const value = doc[expression]
-    if (Array.isArray(value)) {
-      return value.length > 0
-    }
-    return !!value
-  }
-
-  // eval: expression - simplified evaluation
-  // For full Frappe compatibility, complex expressions should be validated server-side
-  if (typeof expression === 'string' && expression.startsWith('eval:')) {
-    try {
-      const evalStr = expression.substring(5)
-      // Simple expression evaluation - replace doc references
-      const result = evaluateExpression(evalStr, doc)
-      return !!result
-    } catch (e) {
-      console.warn('Failed to evaluate mandatory_depends_on:', expression, e)
-      return false
-    }
-  }
-
-  return false
-}
-
-/**
- * Simple expression evaluator for mandatory_depends_on
- * Handles basic patterns like: doc.field_name, doc.field == 'value'
- */
-function evaluateExpression(expression: string, doc: Record<string, any>): boolean {
-  try {
-    // Replace doc. references with actual values
-    const processedExpr = expression.replace(/doc\.(\w+)/g, (_, fieldname) => {
-      const value = doc[fieldname]
-      if (value === null || value === undefined) return 'null'
-      if (typeof value === 'string') return JSON.stringify(value)
-      if (typeof value === 'boolean') return value ? 'true' : 'false'
-      return String(value)
-    })
-
-    // Use Function constructor for safe evaluation (no access to outer scope)
-    // eslint-disable-next-line no-new-func
-    const fn = new Function(`return ${processedExpr}`)
-    return fn()
-  } catch {
-    return false
-  }
-}
+// Note: We intentionally do not evaluate mandatory_depends_on here.
+// In Desk, dependency refresh converts it into df.reqd=1/0; our separate frontend
+// mirrors that by precomputing dependency state and passing effective meta.fields
+// into this validator.
 
 // ============================================================================
 // Data Field Validation

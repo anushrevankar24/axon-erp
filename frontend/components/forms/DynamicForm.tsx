@@ -24,6 +24,9 @@ import { toast } from 'sonner'
 import { checkMandatory, formatValidationErrors } from '@/lib/utils/validation'
 import { slugify } from '@/lib/utils/workspace'
 import { useMessageDialog } from '@/components/ui/message-dialog'
+import { computeDependencyStateForMetaFields } from '@/lib/form/dependency_state'
+import { useFrappeRuntimeVersion } from '@/lib/frappe-runtime/react'
+import { applyDependencyOverrides } from '@/lib/utils/field-permissions'
 
 // ============================================================================
 // Types
@@ -85,9 +88,22 @@ export function DynamicForm({
   const { data: doc, isLoading: docLoading } = useDoc(doctype, id)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const { showError } = useMessageDialog()
+  const runtimeVersion = useFrappeRuntimeVersion()
   
   // Determine if this is a new document
   const isNew = !id || id === 'new'
+
+  // Dependency state (Desk refresh_dependency equivalent)
+  const dependencyState = React.useMemo(() => {
+    if (!meta || !doc) return {}
+    return computeDependencyStateForMetaFields(meta.fields || [], { doc, parent: doc })
+  }, [meta, doc, runtimeVersion])
+
+  const effectiveMeta = React.useMemo(() => {
+    if (!meta) return meta
+    const fields = (meta.fields || []).map((f: any) => applyDependencyOverrides(f, dependencyState[f.fieldname]))
+    return { ...meta, fields }
+  }, [meta, dependencyState])
   
   // Initialize form with proper default values to avoid uncontrolled input warnings
   const form = useForm({
@@ -119,8 +135,8 @@ export function DynamicForm({
       // Step 1: Client-side mandatory validation
       // ========================================
       // Same pattern as frappe.ui.form.check_mandatory in save.js
-      if (meta) {
-        const validationResult = checkMandatory(meta, data, form)
+      if (effectiveMeta) {
+        const validationResult = checkMandatory(effectiveMeta as any, data, form)
         
         if (!validationResult.valid) {
           // Format error message like ERPNext
@@ -268,7 +284,7 @@ export function DynamicForm({
     } finally {
       setIsSubmitting(false)
     }
-  }, [doctype, id, isNew, meta, form, router, onSaveSuccess, onSaveError, isSubmitting])
+  }, [doctype, id, isNew, effectiveMeta, form, router, onSaveSuccess, onSaveError, isSubmitting])
 
   // ============================================================================
   // Expose form methods to parent
@@ -288,7 +304,9 @@ export function DynamicForm({
   // Render
   // ============================================================================
   
-  if (metaLoading || (id && id !== 'new' && docLoading)) {
+  // IMPORTANT: Never render the form while the doc is still loading.
+  // Desk always evaluates dependencies against an actual doc object.
+  if (metaLoading || docLoading) {
     return <FormSkeleton />
   }
   
@@ -308,7 +326,13 @@ export function DynamicForm({
           className="space-y-3"
           noValidate // We handle validation ourselves
         >
-          <FormLayoutRenderer fields={meta.fields || []} form={form} doc={doc} meta={meta} />
+          <FormLayoutRenderer
+            fields={effectiveMeta.fields || []}
+            form={form}
+            doc={doc}
+            meta={effectiveMeta}
+            dependencyState={dependencyState}
+          />
         </form>
       </Form>
     </div>

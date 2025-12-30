@@ -21,6 +21,7 @@ import { ChildTable } from './ChildTable'
 import { cn } from '@/lib/utils'
 import { useFieldPermissions } from '@/lib/hooks/useFieldPermissions'
 import { DocTypeMeta } from '@/lib/types/metadata'
+import type { DependencyStateMap } from '@/lib/form/dependency_state'
 
 // ============================================================================
 // Types
@@ -44,6 +45,7 @@ interface FieldRendererProps {
   form: any // UseFormReturn from react-hook-form
   doc: any  // Current document
   meta?: DocTypeMeta  // DocType metadata
+  dependencyState?: DependencyStateMap
 }
 
 // ============================================================================
@@ -96,9 +98,9 @@ function formatDatetimeForInput(value: string | null | undefined): string {
 // Main Component
 // ============================================================================
 
-export function FieldRenderer({ field, form, doc, meta }: FieldRendererProps) {
+export function FieldRenderer({ field, form, doc, meta, dependencyState }: FieldRendererProps) {
   const fieldName = field.fieldname
-  const { getFieldStatus } = useFieldPermissions(meta, doc)
+  const { getFieldStatus } = useFieldPermissions(meta, doc, dependencyState)
   const fieldStatus = getFieldStatus(fieldName)
   
   // Hide if no permission
@@ -112,7 +114,7 @@ export function FieldRenderer({ field, form, doc, meta }: FieldRendererProps) {
   }
   
   // Determine if field should be read-only
-  const isReadOnly = fieldStatus === 'Read' || field.read_only
+  const isReadOnly = fieldStatus === 'Read' || !!field.read_only
   
   // Get error state from form
   const errorState = form.formState.errors[fieldName]

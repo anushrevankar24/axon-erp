@@ -14,7 +14,9 @@ export const frappe = new FrappeApp(
   getBackendURL(),  // Returns empty string for relative URLs
   {
     useToken: false,
-    type: 'browser'
+    // frappe-js-sdk requires a token type in its typings; for cookie-auth we don't use it,
+    // but we keep a valid value for type safety.
+    type: 'token'
   }
 )
 

@@ -16,18 +16,20 @@ export function ShortcutCard({ shortcut, workspaceModule }: ShortcutCardProps) {
   
   const getHref = () => {
     if (shortcut.type === 'URL') return shortcut.url || '#'
+    const linkTo = shortcut.link_to
+    if (!linkTo) return '#'
     if (shortcut.type === 'DocType') {
       // ERPNext pattern: Use slug - "Item" → "item"
-      return `/app/${slugify(shortcut.link_to)}`
+      return `/app/${slugify(linkTo)}`
     }
     if (shortcut.type === 'Report') {
-      return `/app/query-report/${slugify(shortcut.link_to)}`
+      return `/app/query-report/${slugify(linkTo)}`
     }
     if (shortcut.type === 'Dashboard') {
-      return `/app/dashboard-view/${slugify(shortcut.link_to)}`
+      return `/app/dashboard-view/${slugify(linkTo)}`
     }
     if (shortcut.type === 'Page') {
-      return `/app/${slugify(shortcut.link_to)}`
+      return `/app/${slugify(linkTo)}`
     }
     return '#'
   }

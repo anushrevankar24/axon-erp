@@ -8,9 +8,10 @@
 import { useMemo } from 'react'
 import { useBoot } from '@/lib/api/hooks'
 import { DocTypeMeta } from '@/lib/types/metadata'
-import { calculatePermissions, getFieldDisplayStatus, evaluateDependsOn } from '@/lib/utils/field-permissions'
+import { calculatePermissions, getFieldDisplayStatus, evaluateDependsOn, applyDependencyOverrides } from '@/lib/utils/field-permissions'
+import type { DependencyStateMap } from '@/lib/form/dependency_state'
 
-export function useFieldPermissions(meta: DocTypeMeta | undefined, doc: any) {
+export function useFieldPermissions(meta: DocTypeMeta | undefined, doc: any, dependencyState?: DependencyStateMap) {
   const { data: boot } = useBoot()
   
   const permissions = useMemo(() => {
@@ -27,14 +28,16 @@ export function useFieldPermissions(meta: DocTypeMeta | undefined, doc: any) {
       const field = meta.fields.find(f => f.fieldname === fieldname)
       if (!field) return 'None'
       
-      // Check depends_on first
-      if (evaluateDependsOn(field, doc)) {
+      const effectiveField = applyDependencyOverrides(field as any, dependencyState?.[fieldname])
+
+      // If dependencyState isn't provided, fall back to dynamic evaluation.
+      if (!dependencyState && evaluateDependsOn(field as any, doc)) {
         return 'None'
       }
       
-      return getFieldDisplayStatus(field, doc, permissions)
+      return getFieldDisplayStatus(effectiveField as any, doc, permissions)
     }
-  }, [meta, doc, permissions])
+  }, [meta, doc, permissions, dependencyState])
   
   return {
     permissions,

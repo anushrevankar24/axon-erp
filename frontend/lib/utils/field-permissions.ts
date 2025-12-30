@@ -7,6 +7,8 @@
  */
 
 import { DocTypeMeta, DocField, DocPermission } from '@/lib/types/metadata'
+import { evaluateDependsOnValue } from '@/lib/form/depends_on'
+import type { DependencyStateMap } from '@/lib/form/dependency_state'
 
 export type FieldDisplayStatus = 'Write' | 'Read' | 'None'
 
@@ -95,6 +97,7 @@ export function getFieldDisplayStatus(
   
   // Apply field-level overrides
   if (field.hidden) status = 'None'
+  if ((field as any).hidden_due_to_dependency) status = 'None'
   
   // ERPNext pattern: Check doc existence BEFORE accessing properties
   // Source: frappe/public/js/frappe/model/perm.js line 226
@@ -142,49 +145,30 @@ export function evaluateDependsOn(
   doc: any
 ): boolean {
   if (!field.depends_on) return false
+
+  // Desk does not evaluate dependencies without a document.
+  // DynamicForm now blocks render until doc is available, but keep this guard for safety.
+  if (!doc) return false
   
-  // Handle eval: expressions
-  if (field.depends_on.startsWith('eval:')) {
-    const expression = field.depends_on.replace('eval:', '')
-    try {
-      // Create evaluation context with helper functions
-      const context = {
-        doc: doc || {},
-        // Add ERPNext helper functions used in depends_on
-        in_list: (list: any[], value: any) => Array.isArray(list) && list.includes(value),
-        cint: (value: any) => parseInt(value) || 0,
-        flt: (value: any) => parseFloat(value) || 0,
-        // Add more as needed
-      }
-      
-      // Safe evaluation using Function constructor (safer than eval)
-      const evalFunc = new Function('doc', 'in_list', 'cint', 'flt', `
-        try {
-          return ${expression}
-        } catch (e) {
-          console.warn('depends_on evaluation failed:', '${expression}', e);
-          return true; // Show field on error
-        }
-      `)
-      
-      const result = evalFunc(context.doc, context.in_list, context.cint, context.flt)
-      return !result  // Return true to HIDE field
-    } catch (e) {
-      console.warn('Failed to evaluate depends_on:', expression, e)
-      return false  // Show field if evaluation fails
-    }
+  const guardianHasValue = !!evaluateDependsOnValue(field.depends_on as any, { doc })
+  // Frappe semantics: hide when guardian is false.
+  return !guardianHasValue
+}
+
+export function applyDependencyOverrides(field: DocField, deps?: DependencyStateMap[string]): DocField {
+  if (!deps) return field
+
+  const next: any = { ...field }
+  if (deps.hidden_due_to_dependency !== undefined) {
+    // Frappe stores this as 0/1 on df
+    next.hidden_due_to_dependency = deps.hidden_due_to_dependency ? 1 : 0
   }
-  
-  // Simple field check: "fieldname"
-  // Check if field has truthy value
-  const value = doc[field.depends_on]
-  
-  // ERPNext logic: field is hidden if depends_on value is falsy
-  // But consider 0 as falsy, null/undefined as falsy
-  if (value === null || value === undefined || value === '' || value === 0 || value === false) {
-    return true  // Hide field
+  if (deps.reqd !== undefined) {
+    next.reqd = deps.reqd
   }
-  
-  return false  // Show field
+  if (deps.read_only !== undefined) {
+    next.read_only = deps.read_only
+  }
+  return next as DocField
 }
 

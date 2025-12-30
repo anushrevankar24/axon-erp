@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { useRouter } from 'next/navigation'
 import { call } from '@/lib/api/client'
 import { useBoot } from '@/lib/api/hooks'
+import { setBoot as setFrappeRuntimeBoot, setDocFetcher } from '@/lib/frappe-runtime'
 
 interface AuthContextType {
   user: any | null
@@ -34,6 +35,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
   // Handle boot data - determine if user is authenticated
   useEffect(() => {
+    if (boot) {
+      // Initialize logic runtime with boot context (Desk gets this embedded).
+      setFrappeRuntimeBoot(boot)
+    }
+
     if (error) {
       const status = (error as any)?.response?.status
       // Session expired or unauthorized
@@ -55,6 +61,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsAuthenticated(false)
     }
   }, [boot, error, router])
+
+  // Provide a doc fetcher for runtime lazy lookups (e.g. Company/Currency in depends_on eval).
+  useEffect(() => {
+    setDocFetcher(async (doctype: string, name: string) => {
+      const result = await call('frappe.client.get', { doctype, name })
+      return result.message
+    })
+  }, [])
   
   /**
    * Logout - Call Frappe's logout API

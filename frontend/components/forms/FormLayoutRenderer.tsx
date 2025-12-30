@@ -7,6 +7,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { FieldRenderer } from './FieldRenderer'
 import { evaluateDependsOnValue } from '@/lib/utils/evaluate-depends-on'
+import type { DependencyStateMap } from '@/lib/form/dependency_state'
+import { useFrappeRuntimeVersion } from '@/lib/frappe-runtime/react'
 
 interface Section {
   fieldname?: string
@@ -19,7 +21,7 @@ interface Section {
   columns: Field[][]
 }
 
-interface Tab {
+interface FormTab {
   label: string
   fieldname?: string
   sections: Section[]
@@ -42,9 +44,11 @@ interface FormLayoutRendererProps {
   form: any
   doc?: any
   meta?: any
+  dependencyState?: DependencyStateMap
 }
 
-export function FormLayoutRenderer({ fields, form, doc, meta }: FormLayoutRendererProps) {
+export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState }: FormLayoutRendererProps) {
+  const runtimeVersion = useFrappeRuntimeVersion()
   // Parse fields into tabs (3-level hierarchy: Tab → Section → Column)
   const tabs = React.useMemo(() => parseFieldsIntoTabs(fields), [fields])
   
@@ -56,22 +60,30 @@ export function FormLayoutRenderer({ fields, form, doc, meta }: FormLayoutRender
       sections: tab.sections.map(section => {
         // Evaluate depends_on for this section
         let hidden_due_to_dependency = false
+        let collapsed_due_to_dependency: boolean | undefined = undefined
         
         if (section.depends_on) {
           // Use ERPNext's exact evaluation logic
           const guardianHasValue = evaluateDependsOnValue(section.depends_on, doc)
           hidden_due_to_dependency = !guardianHasValue
         }
+
+        // Collapsible depends_on parity (layout.js):
+        // collapse = !evaluate_depends_on_value(df.collapsible_depends_on)
+        if (section.collapsible_depends_on) {
+          collapsed_due_to_dependency = !evaluateDependsOnValue(section.collapsible_depends_on, doc)
+        }
         
         return {
           ...section,
           hidden_due_to_dependency,
+          collapsed_due_to_dependency,
           // Final hidden state: explicit hidden OR depends_on hidden
           isHidden: section.hidden === 1 || hidden_due_to_dependency
         }
       })
     }))
-  }, [tabs, doc])  // Re-run when doc changes (React's equivalent to ERPNext's refresh)
+  }, [tabs, doc, runtimeVersion])  // Re-run when doc/runtime changes (equivalent to refresh_dependency)
   
   // Safety check - ensure we have at least one tab
   if (tabsWithVisibility.length === 0) {
@@ -91,6 +103,7 @@ export function FormLayoutRenderer({ fields, form, doc, meta }: FormLayoutRender
               form={form}
               doc={doc}
               meta={meta}
+              dependencyState={dependencyState}
             />
           )
         )}
@@ -121,6 +134,7 @@ export function FormLayoutRenderer({ fields, form, doc, meta }: FormLayoutRender
                   form={form}
                   doc={doc}
                   meta={meta}
+                  dependencyState={dependencyState}
                 />
               )
             )}
@@ -131,14 +145,14 @@ export function FormLayoutRenderer({ fields, form, doc, meta }: FormLayoutRender
   )
 }
 
-function parseFieldsIntoTabs(fields: Field[]): Tab[] {
-  const tabs: Tab[] = []
-  let currentTab: Tab | null = null
+function parseFieldsIntoTabs(fields: Field[]): FormTab[] {
+  const tabs: FormTab[] = []
+  let currentTab: FormTab | null = null
   let currentSection: Section = { columns: [[]] }
   let currentColumnIndex = 0
   let hasTabBreaks = fields.some(f => f.fieldtype === 'Tab Break')
 
-  fields.forEach((field) => {
+  for (const field of fields) {
     if (field.fieldtype === 'Tab Break') {
       // Save current section to current tab
       if (currentTab && (currentSection.columns[0].length > 0 || currentSection.label)) {
@@ -203,7 +217,7 @@ function parseFieldsIntoTabs(fields: Field[]): Tab[] {
       }
       currentSection.columns[currentColumnIndex].push(field)
     }
-  })
+  }
 
   // Add last section to current tab
   if (currentTab && (currentSection.columns[0].length > 0 || currentSection.label)) {
@@ -262,15 +276,25 @@ function FormSection({
   sectionIndex, 
   form,
   doc,
-  meta
+  meta,
+  dependencyState
 }: { 
   section: Section
   sectionIndex: number
   form: any
   doc?: any
   meta?: any
+  dependencyState?: DependencyStateMap
 }) {
-  const [isOpen, setIsOpen] = React.useState(!section.collapsed)
+  const collapsedByDependency = (section as any).collapsed_due_to_dependency
+  const initialCollapsed = collapsedByDependency !== undefined ? collapsedByDependency : section.collapsed
+  const [isOpen, setIsOpen] = React.useState(!initialCollapsed)
+
+  React.useEffect(() => {
+    if (collapsedByDependency !== undefined) {
+      setIsOpen(!collapsedByDependency)
+    }
+  }, [collapsedByDependency])
   
   // Filter empty columns
   const nonEmptyColumns = section.columns.filter(column => column.length > 0)
@@ -295,6 +319,7 @@ function FormSection({
               form={form}
               doc={doc}
               meta={meta}
+              dependencyState={dependencyState}
             />
           ))}
         </div>

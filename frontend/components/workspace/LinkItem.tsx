@@ -18,17 +18,20 @@ export function LinkItem({ link, workspaceModule }: LinkItemProps) {
   }
 
   const getHref = () => {
+    const linkTo = link.link_to
+    if (!linkTo) return '#'
+
     // ERPNext pattern: Use slug - "Item" → "item"
     if (link.link_type === 'DocType') {
-      return `/app/${slugify(link.link_to)}`
+      return `/app/${slugify(linkTo)}`
     }
     if (link.link_type === 'Report') {
       return link.is_query_report 
-        ? `/app/query-report/${slugify(link.link_to)}`
-        : `/app/report/${slugify(link.link_to)}`
+        ? `/app/query-report/${slugify(linkTo)}`
+        : `/app/report/${slugify(linkTo)}`
     }
     if (link.link_type === 'Page') {
-      return `/app/${slugify(link.link_to)}`
+      return `/app/${slugify(linkTo)}`
     }
     return '#'
   }

@@ -134,17 +134,23 @@ export function useDocInfo(doctype: string, name?: string) {
  * For new documents, calls get_new_doc to get defaults
  */
 export function useDoc(doctype: string, name?: string) {
+  // Normalize "new document" naming:
+  // - Desk routes use /new
+  // - Some callers may pass undefined
+  // Treat both as "new" so the hook always fetches a real doc before render.
+  const normalizedName = name ?? 'new'
+
   return useQuery({
-    queryKey: ['doc', doctype, name],
+    queryKey: ['doc', doctype, normalizedName],
     queryFn: async () => {
       // Handle new documents
-      if (!name || name === 'new') {
+      if (normalizedName === 'new') {
         const newDoc = await getNewDoc(doctype)
         return newDoc
       }
       
       // Handle existing documents
-      const result = await getDocument(doctype, name!)
+      const result = await getDocument(doctype, normalizedName)
       
       if (!result.success) {
         // Return null for not found (handled by component)
@@ -156,7 +162,7 @@ export function useDoc(doctype: string, name?: string) {
       
       return result.doc
     },
-    enabled: !!name,
+    enabled: !!doctype,
     retry: 1,
   })
 }
