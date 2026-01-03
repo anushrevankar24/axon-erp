@@ -7,6 +7,7 @@ import { DocumentLayout } from '@/components/document/DocumentLayout'
 import { Card } from '@/components/ui/card'
 import Link from 'next/link'
 import { AlertCircle } from 'lucide-react'
+import { FormSkeleton } from '@/components/ui/skeleton'
 
 interface FormPageProps {
   params: Promise<{ route: string; id: string }>
@@ -29,7 +30,9 @@ export default function FormPage({ params }: FormPageProps) {
   if (!boot) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div>Loading...</div>
+        <div className="w-full max-w-7xl px-4">
+          <FormSkeleton />
+        </div>
       </div>
     )
   }

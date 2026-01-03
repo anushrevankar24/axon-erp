@@ -1,0 +1,2 @@
+export { GanttView } from './GanttView'
+

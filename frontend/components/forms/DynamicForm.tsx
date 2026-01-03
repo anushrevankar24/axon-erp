@@ -14,9 +14,10 @@
 import * as React from 'react'
 import { useForm } from 'react-hook-form'
 import { useRouter } from 'next/navigation'
-import { useMeta, useDoc } from '@/lib/api/hooks'
+import { useMetaWithSettings, useDoc } from '@/lib/api/hooks'
 import { saveDocument } from '@/lib/api/document'
 import { FormLayoutRenderer } from './FormLayoutRenderer'
+import { QuickEntryInline } from './QuickEntryInline'
 import { scrollToField } from './FieldRenderer'
 import { Form } from '@/components/ui/form'
 import { FormSkeleton } from '@/components/ui/skeleton'
@@ -84,14 +85,21 @@ export function DynamicForm({
   onSaveError 
 }: DynamicFormProps) {
   const router = useRouter()
-  const { data: meta, isLoading: metaLoading } = useMeta(doctype)
+  const { data: metaWithSettings, isLoading: metaLoading } = useMetaWithSettings(doctype)
   const { data: doc, isLoading: docLoading } = useDoc(doctype, id)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const { showError } = useMessageDialog()
   const runtimeVersion = useFrappeRuntimeVersion()
   
+  // Extract meta and user_settings
+  const meta = metaWithSettings?.meta
+  const userSettings = metaWithSettings?.user_settings
+  
   // Determine if this is a new document
   const isNew = !id || id === 'new'
+  
+  // Quick Entry mode state
+  const [showQuickEntry, setShowQuickEntry] = React.useState(false)
 
   // Dependency state (Desk refresh_dependency equivalent)
   const dependencyState = React.useMemo(() => {
@@ -104,6 +112,72 @@ export function DynamicForm({
     const fields = (meta.fields || []).map((f: any) => applyDependencyOverrides(f, dependencyState[f.fieldname]))
     return { ...meta, fields }
   }, [meta, dependencyState])
+  
+  // Quick Entry eligibility check (matches quick_entry.js)
+  const quickEntryInfo = React.useMemo(() => {
+    if (!isNew || !meta || !effectiveMeta) {
+      return { eligible: false, fields: [] }
+    }
+    
+    // Check meta.quick_entry flag
+    if (meta.quick_entry !== 1) {
+      return { eligible: false, fields: [] }
+    }
+    
+    // Get mandatory/quick-entry fields
+    // Matches quick_entry.js: (df.reqd || df.allow_in_quick_entry) && !df.read_only && !df.is_virtual && df.fieldtype !== "Tab Break"
+    const mandatoryFields = effectiveMeta.fields.filter((f: any) => 
+      (f.reqd || f.allow_in_quick_entry) &&
+      !f.read_only &&
+      !f.is_virtual &&
+      f.fieldtype !== 'Tab Break' &&
+      !f.hidden &&
+      !f.hidden_due_to_dependency
+    )
+    
+    // Disqualify if has mandatory Table field
+    const hasMandatoryTable = mandatoryFields.some((f: any) => f.fieldtype === 'Table')
+    if (hasMandatoryTable) {
+      return { eligible: false, fields: [] }
+    }
+    
+    // Disqualify if too many mandatory fields (>7)
+    if (mandatoryFields.length > 7) {
+      return { eligible: false, fields: [] }
+    }
+    
+    // Handle autoname === "prompt" (inject __newname field)
+    let fields = [...mandatoryFields]
+    if (meta.autoname && meta.autoname.toLowerCase() === 'prompt') {
+      fields.unshift({
+        fieldname: '__newname',
+        fieldtype: 'Data',
+        label: `${meta.name} Name`,
+        reqd: 1,
+        read_only: 0,
+        hidden: 0
+      })
+    }
+    
+    // Dev logging
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[QuickEntry ${doctype}]`, {
+        eligible: true,
+        quickEntryFlag: meta.quick_entry,
+        mandatoryFields: fields.length,
+        fields: fields.map((f: any) => f.fieldname)
+      })
+    }
+    
+    return { eligible: true, fields }
+  }, [isNew, meta, effectiveMeta, doctype])
+  
+  // Initialize quick entry mode if eligible
+  React.useEffect(() => {
+    if (quickEntryInfo.eligible && isNew) {
+      setShowQuickEntry(true)
+    }
+  }, [quickEntryInfo.eligible, isNew])
   
   // Initialize form with proper default values to avoid uncontrolled input warnings
   const form = useForm({
@@ -326,13 +400,27 @@ export function DynamicForm({
           className="space-y-3"
           noValidate // We handle validation ourselves
         >
-          <FormLayoutRenderer
-            fields={effectiveMeta.fields || []}
-            form={form}
-            doc={doc}
-            meta={effectiveMeta}
-            dependencyState={dependencyState}
-          />
+          {/* Show Quick Entry for new docs if eligible */}
+          {isNew && showQuickEntry && quickEntryInfo.eligible ? (
+            <QuickEntryInline
+              fields={quickEntryInfo.fields}
+              form={form}
+              doc={doc}
+              meta={effectiveMeta}
+              dependencyState={dependencyState}
+              userSettings={userSettings}
+              onEditFullForm={() => setShowQuickEntry(false)}
+            />
+          ) : (
+            <FormLayoutRenderer
+              fields={effectiveMeta.fields || []}
+              form={form}
+              doc={doc}
+              meta={effectiveMeta}
+              dependencyState={dependencyState}
+              userSettings={userSettings}
+            />
+          )}
         </form>
       </Form>
     </div>

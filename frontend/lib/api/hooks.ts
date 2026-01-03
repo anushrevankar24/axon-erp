@@ -50,6 +50,31 @@ export function useMeta(doctype: string) {
 }
 
 /**
+ * Fetch DocType metadata with user_settings
+ * Returns meta + user_settings (collapsed sections, grid columns, etc.)
+ */
+export function useMetaWithSettings(doctype: string) {
+  return useQuery({
+    queryKey: ['meta-with-settings', doctype],
+    queryFn: async () => {
+      const result = await getDocType(doctype)
+      
+      if (!result.success || !result.meta) {
+        throw new Error(result.error?.message || `No metadata returned for ${doctype}`)
+      }
+      
+      return {
+        meta: result.meta,
+        user_settings: result.user_settings || {}
+      }
+    },
+    enabled: !!doctype,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  })
+}
+
+/**
  * Get all child table metas for a DocType
  */
 export function useMetaBundle(doctype: string) {

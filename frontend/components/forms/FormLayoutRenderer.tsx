@@ -9,6 +9,8 @@ import { FieldRenderer } from './FieldRenderer'
 import { evaluateDependsOnValue } from '@/lib/utils/evaluate-depends-on'
 import type { DependencyStateMap } from '@/lib/form/dependency_state'
 import { useFrappeRuntimeVersion } from '@/lib/frappe-runtime/react'
+import { isNullOrEmpty } from '@/lib/utils/validation'
+import { saveUserSettings } from '@/lib/user-settings/service'
 
 interface Section {
   fieldname?: string
@@ -45,10 +47,16 @@ interface FormLayoutRendererProps {
   doc?: any
   meta?: any
   dependencyState?: DependencyStateMap
+  userSettings?: any
 }
 
-export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState }: FormLayoutRendererProps) {
+export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, userSettings }: FormLayoutRendererProps) {
   const runtimeVersion = useFrappeRuntimeVersion()
+  // Track collapsed sections for persistence
+  const [collapsedSectionsState, setCollapsedSectionsState] = React.useState<Record<string, boolean>>({})
+  // Track active tab
+  const [activeTab, setActiveTab] = React.useState<string | null>(null)
+  
   // Parse fields into tabs (3-level hierarchy: Tab → Section → Column)
   const tabs = React.useMemo(() => parseFieldsIntoTabs(fields), [fields])
   
@@ -90,6 +98,35 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState }:
     return <div className="p-4 text-muted-foreground text-sm">No fields to display</div>
   }
   
+  // Debounced save of collapsed sections and active tab
+  React.useEffect(() => {
+    if (!meta?.name) return
+    
+    const hasUpdates = Object.keys(collapsedSectionsState).length > 0 || activeTab !== null
+    if (!hasUpdates) return
+    
+    const updates: any = {}
+    
+    if (Object.keys(collapsedSectionsState).length > 0) {
+      updates.Form = {
+        ...updates.Form,
+        collapsed_sections: collapsedSectionsState
+      }
+    }
+    
+    if (activeTab !== null) {
+      updates.Form = {
+        ...updates.Form,
+        active_tab: activeTab
+      }
+    }
+    
+    // Use service's debounced save
+    saveUserSettings(meta.name, updates).catch(err => {
+      console.error('[FormLayoutRenderer] Failed to save user settings:', err)
+    })
+  }, [collapsedSectionsState, activeTab, meta?.name])
+  
   // If only one tab (no Tab Breaks), render without tabs UI
   if (tabsWithVisibility.length === 1) {
     return (
@@ -104,6 +141,15 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState }:
               doc={doc}
               meta={meta}
               dependencyState={dependencyState}
+              userSettings={userSettings}
+              onCollapsedChange={(collapsed) => {
+                if (section.fieldname) {
+                  setCollapsedSectionsState(prev => ({
+                    ...prev,
+                    [section.fieldname!]: collapsed
+                  }))
+                }
+              }}
             />
           )
         )}
@@ -112,8 +158,16 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState }:
   }
   
   // Multiple tabs - render with tabs UI
+  // Restore active tab from user_settings or default to first tab
+  const savedActiveTab = userSettings?.Form?.active_tab
+  const defaultTab = savedActiveTab || tabsWithVisibility[0].fieldname || '0'
+  
   return (
-    <Tabs defaultValue={tabsWithVisibility[0].fieldname || '0'} className="w-full">
+    <Tabs 
+      defaultValue={defaultTab} 
+      className="w-full"
+      onValueChange={(value) => setActiveTab(value)}
+    >
       <TabsList>
         {tabsWithVisibility.map((tab, index) => (
           <TabsTrigger key={tab.fieldname || index} value={tab.fieldname || String(index)}>
@@ -135,6 +189,15 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState }:
                   doc={doc}
                   meta={meta}
                   dependencyState={dependencyState}
+                  userSettings={userSettings}
+                  onCollapsedChange={(collapsed) => {
+                    if (section.fieldname) {
+                      setCollapsedSectionsState(prev => ({
+                        ...prev,
+                        [section.fieldname!]: collapsed
+                      }))
+                    }
+                  }}
                 />
               )
             )}
@@ -193,7 +256,8 @@ function parseFieldsIntoTabs(fields: Field[]): FormTab[] {
         hidden: field.hidden,
         collapsible: field.collapsible === 1,
         collapsible_depends_on: field.collapsible_depends_on,
-        collapsed: !!field.collapsible_depends_on,
+        // ERPNext Desk parity: collapsible sections default to collapsed (true)
+        collapsed: field.collapsible === 1,
         columns: [[]]
       }
       currentColumnIndex = 0
@@ -277,7 +341,9 @@ function FormSection({
   form,
   doc,
   meta,
-  dependencyState
+  dependencyState,
+  userSettings,
+  onCollapsedChange
 }: { 
   section: Section
   sectionIndex: number
@@ -285,16 +351,69 @@ function FormSection({
   doc?: any
   meta?: any
   dependencyState?: DependencyStateMap
+  userSettings?: any
+  onCollapsedChange?: (collapsed: boolean) => void
 }) {
   const collapsedByDependency = (section as any).collapsed_due_to_dependency
-  const initialCollapsed = collapsedByDependency !== undefined ? collapsedByDependency : section.collapsed
-  const [isOpen, setIsOpen] = React.useState(!initialCollapsed)
+  
+  // Check if section has missing mandatory fields (ERPNext Desk parity)
+  // If it does, force the section to be open
+  const hasMissingMandatory = React.useMemo(() => {
+    if (!section.collapsible || !doc) return false
+    
+    // Get all fields in this section
+    const sectionFields = section.columns.flat()
+    
+    // Check each field for missing mandatory values
+    for (const field of sectionFields) {
+      // Skip if not mandatory or hidden
+      const isHidden = field.hidden || dependencyState?.[field.fieldname]?.hidden_due_to_dependency
+      if (isHidden) continue
+      
+      // Check if field is mandatory (from field meta or dependency state)
+      const isRequired = field.reqd || dependencyState?.[field.fieldname]?.reqd
+      if (!isRequired) continue
+      
+      // Check if value is missing
+      const value = doc[field.fieldname]
+      if (isNullOrEmpty(value)) {
+        return true
+      }
+    }
+    
+    return false
+  }, [section, doc, dependencyState])
+  
+  // Compute initial collapsed state:
+  // 1. If collapsible_depends_on evaluated, use that
+  // 2. Else use section.collapsed (defaults to true for collapsible sections)
+  // 3. But if has missing mandatory, force open
+  const initialCollapsed = collapsedByDependency !== undefined 
+    ? collapsedByDependency 
+    : section.collapsed
+  
+  // Check user_settings for saved collapsed state
+  const userCollapsedState = userSettings?.Form?.collapsed_sections?.[section.fieldname!]
+  const effectiveInitialCollapsed = userCollapsedState !== undefined 
+    ? userCollapsedState 
+    : initialCollapsed
+  
+  const [isOpen, setIsOpen] = React.useState(!effectiveInitialCollapsed || hasMissingMandatory)
 
+  // Re-evaluate when dependency or mandatory state changes
   React.useEffect(() => {
     if (collapsedByDependency !== undefined) {
-      setIsOpen(!collapsedByDependency)
+      setIsOpen(!collapsedByDependency || hasMissingMandatory)
+    } else if (hasMissingMandatory) {
+      setIsOpen(true)
     }
-  }, [collapsedByDependency])
+  }, [collapsedByDependency, hasMissingMandatory])
+  
+  // Notify parent when collapsed state changes (for persistence)
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open)
+    onCollapsedChange?.(!open)
+  }
   
   // Filter empty columns
   const nonEmptyColumns = section.columns.filter(column => column.length > 0)
@@ -320,6 +439,7 @@ function FormSection({
               doc={doc}
               meta={meta}
               dependencyState={dependencyState}
+              userSettings={userSettings}
             />
           ))}
         </div>
@@ -332,10 +452,10 @@ function FormSection({
     if (section.collapsible) {
       return (
         <div className="border border-gray-200 rounded-md bg-white">
-          <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+          <Collapsible open={isOpen} onOpenChange={handleOpenChange}>
             <div 
               className="border-b border-gray-200 px-4 py-2 bg-gray-50 cursor-pointer flex items-center gap-2"
-              onClick={() => setIsOpen(!isOpen)}
+              onClick={() => handleOpenChange(!isOpen)}
             >
               <CollapsibleTrigger asChild>
                 <button type="button" className="flex items-center gap-2 text-sm font-medium text-gray-700">

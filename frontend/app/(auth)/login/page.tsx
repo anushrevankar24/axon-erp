@@ -130,8 +130,20 @@ export default function LoginPage() {
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
         <Card className="w-full max-w-md shadow-lg">
-          <CardContent className="p-6">
-            <div className="text-center">Loading...</div>
+          <CardHeader className="space-y-1">
+            <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+            <div className="h-4 bg-gray-200 rounded w-3/4 mx-auto animate-pulse"></div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <div className="h-4 bg-gray-200 rounded w-20 animate-pulse"></div>
+              <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="space-y-2">
+              <div className="h-4 bg-gray-200 rounded w-20 animate-pulse"></div>
+              <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
           </CardContent>
         </Card>
       </div>

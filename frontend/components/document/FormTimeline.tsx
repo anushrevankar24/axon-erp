@@ -225,7 +225,19 @@ function ActivityList({ doctype, docname }: { doctype: string, docname: string }
   })
 
   if (isLoading) {
-    return <div className="text-sm text-muted-foreground py-4">Loading activity...</div>
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="flex gap-3 py-3 border-b animate-pulse">
+            <div className="flex-shrink-0 h-8 w-8 rounded-full bg-muted"></div>
+            <div className="flex-1 space-y-2">
+              <div className="h-4 bg-muted rounded w-1/3"></div>
+              <div className="h-3 bg-muted rounded w-2/3"></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
   }
 
   const activities = timeline || []

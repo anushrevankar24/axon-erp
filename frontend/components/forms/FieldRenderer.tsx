@@ -46,6 +46,7 @@ interface FieldRendererProps {
   doc: any  // Current document
   meta?: DocTypeMeta  // DocType metadata
   dependencyState?: DependencyStateMap
+  userSettings?: any  // User settings for this DocType
 }
 
 // ============================================================================
@@ -98,7 +99,7 @@ function formatDatetimeForInput(value: string | null | undefined): string {
 // Main Component
 // ============================================================================
 
-export function FieldRenderer({ field, form, doc, meta, dependencyState }: FieldRendererProps) {
+export function FieldRenderer({ field, form, doc, meta, dependencyState, userSettings }: FieldRendererProps) {
   const fieldName = field.fieldname
   const { getFieldStatus } = useFieldPermissions(meta, doc, dependencyState)
   const fieldStatus = getFieldStatus(fieldName)
@@ -135,7 +136,7 @@ export function FieldRenderer({ field, form, doc, meta, dependencyState }: Field
             aria-describedby={hasError ? `${fieldName}-error` : undefined}
           >
             <FormControl>
-              {renderFieldInput(field, formField, form, hasError, isReadOnly)}
+              {renderFieldInput(field, formField, form, hasError, isReadOnly, userSettings)}
             </FormControl>
             
             {/* Show inline error message or field description */}
@@ -176,7 +177,7 @@ export function FieldRenderer({ field, form, doc, meta, dependencyState }: Field
             {field.label}
           </FormLabel>
           <FormControl>
-            {renderFieldInput(field, formField, form, hasError, isReadOnly)}
+            {renderFieldInput(field, formField, form, hasError, isReadOnly, userSettings)}
           </FormControl>
           
           {/* Show inline error message or field description */}
@@ -201,7 +202,7 @@ export function FieldRenderer({ field, form, doc, meta, dependencyState }: Field
 // Field Input Renderer
 // ============================================================================
 
-function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError?: boolean, isReadOnly?: boolean) {
+function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError?: boolean, isReadOnly?: boolean, userSettings?: any) {
   // Common input class with error state
   const inputClass = cn(
     "h-8 text-sm",
@@ -386,13 +387,18 @@ function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError
       )
     
     case 'Table':
+      // Get GridView user settings for this child table
+      const childDoctype = field.options || ''
+      const gridViewSettings = userSettings?.GridView?.[childDoctype]
+      
       return (
         <ChildTable
           value={formField.value || []}
           onChange={formField.onChange}
-          doctype={field.options || ''}
+          doctype={childDoctype}
           disabled={isReadOnly || field.read_only === 1}
           parentForm={form}
+          userSettings={gridViewSettings}
         />
       )
     

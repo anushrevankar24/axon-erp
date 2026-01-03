@@ -13,6 +13,8 @@ import { TableSkeleton } from "@/components/ui/skeleton"
 import { ColumnDef } from "@tanstack/react-table"
 import { formatDistanceToNow } from "date-fns"
 import { Badge } from "@/components/ui/badge"
+import { useUserSettings } from "@/lib/user-settings/react"
+import { saveListFilters, saveListSort, saveListPageLength } from "@/lib/user-settings/helpers"
 
 interface ListViewProps {
   doctype: string
@@ -25,17 +27,39 @@ export function ListView({ doctype }: ListViewProps) {
   // Check permissions
   const { canCreate, canDelete } = usePermissions()
   
-  // State management
+  // Fetch user_settings for this DocType
+  const { data: userSettings } = useUserSettings(doctype)
+  
+  // State management - initialize from user_settings where available
   const [filters, setFilters] = React.useState<Record<string, any>>({})
   const [searchText, setSearchText] = React.useState("")
-  const [sortBy, setSortBy] = React.useState("modified")
-  const [sortOrder, setSortOrder] = React.useState<"asc" | "desc">("desc")
+  const [sortBy, setSortBy] = React.useState(userSettings?.List?.order_by?.split(' ')[0] || "modified")
+  const [sortOrder, setSortOrder] = React.useState<"asc" | "desc">(
+    userSettings?.List?.order_by?.includes('asc') ? 'asc' : 'desc'
+  )
   const [currentPage, setCurrentPage] = React.useState(1)
-  const [pageSize, setPageSize] = React.useState(20)
+  const [pageSize, setPageSize] = React.useState(userSettings?.List?.page_length || 20)
   const [selectedRows, setSelectedRows] = React.useState<string[]>([])
 
   // Fetch metadata
-  const { data: meta, isLoading: metaLoading } = useMeta(doctype)
+  const { data: meta, isLoading: metaLoading} = useMeta(doctype)
+  
+  // Persist sort changes
+  React.useEffect(() => {
+    const orderBy = `${sortBy} ${sortOrder}`
+    saveListSort(doctype, orderBy).catch(err => {
+      console.error('[ListView] Failed to save sort:', err)
+    })
+  }, [sortBy, sortOrder, doctype])
+  
+  // Persist page length changes
+  React.useEffect(() => {
+    if (pageSize !== 20) {  // Only save if non-default
+      saveListPageLength(doctype, pageSize).catch(err => {
+        console.error('[ListView] Failed to save page length:', err)
+      })
+    }
+  }, [pageSize, doctype])
 
   // Fetch list data
   const { data: listData, isLoading: listLoading, refetch } = useListData({

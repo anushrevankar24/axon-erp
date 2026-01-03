@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Plus, Trash2, GripVertical } from "lucide-react"
+import { Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Edit2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table"
 import { useMeta } from "@/lib/api/hooks"
 import { ChildTableCell } from "./ChildTableCell"
+import { TableSkeleton } from "@/components/ui/skeleton"
 
 interface ChildTableProps {
   value: any[]
@@ -20,6 +21,7 @@ interface ChildTableProps {
   doctype: string
   disabled?: boolean
   parentForm?: any
+  userSettings?: any  // GridView user settings for this child table
 }
 
 export function ChildTable({
@@ -27,17 +29,14 @@ export function ChildTable({
   onChange,
   doctype,
   disabled = false,
-  parentForm
+  parentForm,
+  userSettings
 }: ChildTableProps) {
   const { data: childMeta, isLoading } = useMeta(doctype)
+  const [expandedRows, setExpandedRows] = React.useState<Set<number>>(new Set())
 
   if (isLoading) {
-    return (
-      <div className="border rounded-lg p-8 text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-        <p className="mt-2 text-sm text-muted-foreground">Loading {doctype}...</p>
-      </div>
-    )
+    return <TableSkeleton rows={3} columns={4} />
   }
 
   if (!childMeta) {
@@ -48,8 +47,8 @@ export function ChildTable({
     )
   }
 
-  // Get visible fields (exclude hidden, system fields)
-  const visibleFields = childMeta.fields?.filter(
+  // Get all editable fields (exclude hidden, system fields, layout fields)
+  const allEditableFields = childMeta.fields?.filter(
     (f: any) => 
       !f.hidden && 
       f.fieldname !== 'name' && 
@@ -61,8 +60,86 @@ export function ChildTable({
       f.fieldname !== 'parent' &&
       f.fieldname !== 'parentfield' &&
       f.fieldname !== 'parenttype' &&
-      !['Section Break', 'Column Break', 'HTML'].includes(f.fieldtype)
+      !['Section Break', 'Column Break', 'HTML', 'Tab Break'].includes(f.fieldtype)
   ) || []
+
+  // ERPNext Grid parity: select columns based on user_settings or in_list_view flag
+  // Matches grid.js setup_visible_columns() and setup_user_defined_columns()
+  let gridFields: any[] = []
+  let gridFieldsRaw: any[] = []  // Declare at outer scope for dev logging
+  
+  // Check for user-defined columns first (GridView user settings)
+  if (userSettings && Array.isArray(userSettings) && userSettings.length > 0) {
+    // User has customized columns for this grid
+    gridFields = userSettings
+      .map((setting: any) => {
+        const field = allEditableFields.find((f: any) => f.fieldname === setting.fieldname)
+        if (field) {
+          return {
+            ...field,
+            in_list_view: 1,  // Mark as visible
+            colsize: setting.columns || field.colsize
+          }
+        }
+        return null
+      })
+      .filter(Boolean)
+    gridFieldsRaw = gridFields  // For logging
+  } else {
+    // Use in_list_view from meta
+    gridFieldsRaw = allEditableFields.filter((f: any) => f.in_list_view === 1)
+    // Fallback if no fields marked in_list_view: show first few fields
+    gridFields = gridFieldsRaw.length > 0 ? gridFieldsRaw : allEditableFields.slice(0, 6)
+  }
+  
+  // Apply colsize cap (ERPNext Grid stops at total colsize ≈ 11)
+  // Assign default colsize based on fieldtype (matches grid.js update_default_colsize)
+  const fieldsWithColsize = gridFields.map((f: any) => {
+    let colsize = 2 // default
+    if (f.fieldtype === 'Check') colsize = 1
+    else if (f.fieldtype === 'Small Text') colsize = 3
+    else if (f.fieldtype === 'Text') colsize = 2
+    return { ...f, colsize: f.colsize || colsize }
+  })
+  
+  // Cap total colsize at 11 (ERPNext Grid threshold)
+  let totalColsize = 0
+  const cappedGridFields: any[] = []
+  for (const field of fieldsWithColsize) {
+    if (totalColsize + field.colsize > 11) break
+    cappedGridFields.push(field)
+    totalColsize += field.colsize
+  }
+  
+  // Use capped fields, or fallback to at least 3 fields
+  const visibleFields = cappedGridFields.length >= 3 ? cappedGridFields : fieldsWithColsize.slice(0, 3)
+  
+  // Non-grid fields (for inline row editor)
+  const nonGridFields = allEditableFields.filter(
+    (f: any) => !visibleFields.find((vf: any) => vf.fieldname === f.fieldname)
+  )
+  
+  // Dev logging (optional, as per plan)
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[ChildTable ${doctype}]`, {
+      totalFields: allEditableFields.length,
+      in_list_view: gridFieldsRaw.length,
+      visibleColumns: visibleFields.length,
+      nonGridFields: nonGridFields.length
+    })
+  }
+  
+  const toggleRowExpansion = (rowIndex: number) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev)
+      if (next.has(rowIndex)) {
+        next.delete(rowIndex)
+      } else {
+        next.add(rowIndex)
+      }
+      return next
+    })
+  }
 
   const addRow = () => {
     const newRow: any = { 
@@ -163,54 +240,98 @@ export function ChildTable({
                 </TableCell>
               </TableRow>
             ) : (
-              value.map((row, rowIndex) => (
-                <TableRow key={rowIndex} className="group hover:bg-muted/50">
-                  <TableCell className="text-center text-sm text-muted-foreground font-medium">
-                    <div className="flex items-center justify-center gap-1">
-                      <GripVertical className="h-3 w-3 opacity-0 group-hover:opacity-50" />
-                      {rowIndex + 1}
-                    </div>
-                  </TableCell>
-                  {visibleFields.map((field: any) => (
-                    <TableCell key={field.fieldname} className="p-2">
-                      <ChildTableCell
-                        field={field}
-                        value={row[field.fieldname]}
-                        onChange={(newValue) => updateCell(rowIndex, field.fieldname, newValue)}
-                        disabled={disabled || field.read_only === 1}
-                        rowData={row}
-                        parentForm={parentForm}
-                      />
-                    </TableCell>
-                  ))}
-                  {!disabled && (
-                    <TableCell className="p-2">
-                      <div className="flex items-center justify-center gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => duplicateRow(rowIndex)}
-                          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="Duplicate row"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteRow(rowIndex)}
-                          className="h-7 w-7 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="Delete row"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))
+              value.map((row, rowIndex) => {
+                const isExpanded = expandedRows.has(rowIndex)
+                return (
+                  <React.Fragment key={rowIndex}>
+                    <TableRow className="group hover:bg-muted/50">
+                      <TableCell className="text-center text-sm text-muted-foreground font-medium">
+                        <div className="flex items-center justify-center gap-1">
+                          <GripVertical className="h-3 w-3 opacity-0 group-hover:opacity-50" />
+                          {rowIndex + 1}
+                        </div>
+                      </TableCell>
+                      {visibleFields.map((field: any) => (
+                        <TableCell key={field.fieldname} className="p-2">
+                          <ChildTableCell
+                            field={field}
+                            value={row[field.fieldname]}
+                            onChange={(newValue) => updateCell(rowIndex, field.fieldname, newValue)}
+                            disabled={disabled || field.read_only === 1}
+                            rowData={row}
+                            parentForm={parentForm}
+                          />
+                        </TableCell>
+                      ))}
+                      {!disabled && (
+                        <TableCell className="p-2">
+                          <div className="flex items-center justify-center gap-1">
+                            {nonGridFields.length > 0 && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => toggleRowExpansion(rowIndex)}
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title={isExpanded ? "Collapse row" : "Edit all fields"}
+                              >
+                                {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <Edit2 className="h-3.5 w-3.5" />}
+                              </Button>
+                            )}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => duplicateRow(rowIndex)}
+                              className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Duplicate row"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => deleteRow(rowIndex)}
+                              className="h-7 w-7 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Delete row"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                    {isExpanded && nonGridFields.length > 0 && (
+                      <TableRow className="bg-muted/30">
+                        <TableCell colSpan={visibleFields.length + 2} className="p-4">
+                          <div className="grid md:grid-cols-2 gap-3">
+                            {nonGridFields.map((field: any) => (
+                              <div key={field.fieldname} className="space-y-1.5">
+                                <label className="text-xs font-medium text-gray-700">
+                                  {field.label}
+                                  {field.reqd === 1 && <span className="text-red-500 ml-1">*</span>}
+                                </label>
+                                <ChildTableCell
+                                  field={field}
+                                  value={row[field.fieldname]}
+                                  onChange={(newValue) => updateCell(rowIndex, field.fieldname, newValue)}
+                                  disabled={disabled || field.read_only === 1}
+                                  rowData={row}
+                                  parentForm={parentForm}
+                                />
+                                {field.description && (
+                                  <p className="text-xs text-muted-foreground">{field.description}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
+                )
+              })
             )}
           </TableBody>
         </Table>
