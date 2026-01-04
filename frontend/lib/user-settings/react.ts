@@ -34,8 +34,8 @@ export function useSaveUserSettings(doctype: string) {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: async (updates: Partial<UserSettings>) => {
-      await userSettingsService.save(doctype, updates)
+    mutationFn: async (args: { key: string; value: any }) => {
+      await userSettingsService.save(doctype, args.key, args.value)
     },
     onSuccess: () => {
       // Invalidate cache so next read gets fresh data
@@ -53,8 +53,11 @@ export function useSaveUserSettingsImmediate(doctype: string) {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: async (updates: Partial<UserSettings>) => {
-      await userSettingsService.save(doctype, updates, true)
+    // Desk-parity service handles debounced POST internally; provide same signature for API symmetry.
+    // This hook calls save() and then flushes to force immediate POST.
+    mutationFn: async (args: { key: string; value: any }) => {
+      await userSettingsService.save(doctype, args.key, args.value)
+      await userSettingsService.flush()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-settings', doctype] })

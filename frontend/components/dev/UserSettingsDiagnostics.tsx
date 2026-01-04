@@ -19,16 +19,19 @@ export function UserSettingsDiagnostics() {
   const [isOpen, setIsOpen] = React.useState(false)
   const [diagnostics, setDiagnostics] = React.useState<{
     pendingCount: number
-    pendingWrites: Array<{ doctype: string; updates: any }>
+    pendingWrites: Array<{ doctype: string }>
+    cachedSettings: Record<string, any>
   }>({
     pendingCount: 0,
-    pendingWrites: []
+    pendingWrites: [],
+    cachedSettings: {}
   })
   
   const refreshDiagnostics = () => {
     setDiagnostics({
       pendingCount: userSettingsService.getPendingCount(),
-      pendingWrites: userSettingsService.getPendingWrites()
+      pendingWrites: userSettingsService.getPendingWrites(),
+      cachedSettings: userSettingsService.getAllCached()
     })
   }
   
@@ -69,10 +72,34 @@ export function UserSettingsDiagnostics() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4 text-xs">
+            {/* Cached Settings */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-semibold">Cached Settings</span>
+                <Badge variant="secondary">
+                  {Object.keys(diagnostics.cachedSettings).length} doctypes
+                </Badge>
+              </div>
+              {Object.keys(diagnostics.cachedSettings).length > 0 ? (
+                <div className="space-y-2 max-h-60 overflow-auto">
+                  {Object.entries(diagnostics.cachedSettings).map(([doctype, settings]) => (
+                    <details key={doctype} className="bg-muted/50 rounded p-2">
+                      <summary className="font-medium cursor-pointer">{doctype}</summary>
+                      <pre className="text-[10px] mt-2 overflow-auto">
+                        {JSON.stringify(settings, null, 2)}
+                      </pre>
+                    </details>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-muted-foreground">No cached settings</div>
+              )}
+            </div>
+            
             {/* Pending Writes */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold">Pending Writes</span>
+                <span className="font-semibold">Pending Writes (Debounced)</span>
                 <Badge variant={diagnostics.pendingCount > 0 ? "default" : "secondary"}>
                   {diagnostics.pendingCount}
                 </Badge>
@@ -80,11 +107,11 @@ export function UserSettingsDiagnostics() {
               {diagnostics.pendingCount > 0 ? (
                 <div className="space-y-2">
                   {diagnostics.pendingWrites.map((write: any, idx) => (
-                    <div key={idx} className="bg-muted/50 rounded p-2">
+                    <div key={idx} className="bg-yellow-50 rounded p-2">
                       <div className="font-medium">{write.doctype}</div>
-                      <pre className="text-[10px] mt-1 overflow-auto">
-                        {JSON.stringify(write.updates, null, 2)}
-                      </pre>
+                      <div className="text-[10px] mt-1 text-muted-foreground">
+                        Will POST in ~500ms
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -126,11 +153,35 @@ export function UserSettingsDiagnostics() {
               </Button>
             </div>
             
+            {/* localStorage Keys */}
+            <div>
+              <div className="font-semibold mb-2">localStorage Keys (Desk)</div>
+              <div className="bg-muted/50 rounded p-2 text-[10px] space-y-1">
+                <div>• Form sections: [css_class]-closed</div>
+                <div>• Calendar view: cal_defaultView</div>
+                <div>• Calendar weekends: cal_weekends</div>
+                <div className="pt-1 text-muted-foreground">
+                  Current count: {typeof window !== 'undefined' ? Object.keys(localStorage).filter(k => k.endsWith('-closed') || k.startsWith('cal_')).length : 0}
+                </div>
+              </div>
+            </div>
+            
             {/* Current Settings Info */}
-            <div className="text-[10px] text-muted-foreground">
-              <div>Service: userSettingsService</div>
-              <div>Debounce: 1000ms</div>
-              <div>API: frappe.model.utils.user_settings.*</div>
+            <div className="text-[10px] text-muted-foreground space-y-1">
+              <div className="font-semibold text-foreground mb-1">Implementation Status</div>
+              <div>✅ Service: Desk-parity engine</div>
+              <div>✅ List: sort_by/sort_order (Desk keys)</div>
+              <div>✅ Form: localStorage + in-memory</div>
+              <div>✅ GridView: Desk-compatible</div>
+              <div>⚠️ Kanban: needs Board doctype</div>
+              <div>⚠️ Calendar: needs View doctype</div>
+              <div className="pt-2 border-t mt-2">
+                <div className="font-semibold text-foreground mb-1">API Details</div>
+                <div>• Debounce: 500ms POST delay</div>
+                <div>• Cache: In-memory per doctype</div>
+                <div>• Merge: Deep (jQuery pattern)</div>
+                <div>• Compare: JSON (no-op skip)</div>
+              </div>
             </div>
           </CardContent>
         </Card>

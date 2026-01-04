@@ -25,6 +25,13 @@ export function CalendarView({ doctype }: CalendarViewProps) {
   const { data: meta, isLoading: metaLoading } = useMeta(doctype)
   const { data: userSettings } = useUserSettings(doctype)
   
+  // DESK PARITY NOTE: Calendar settings are mixed storage:
+  // - last_calendar: user_settings (for routing)
+  // - cal_defaultView, cal_weekends: localStorage (UI prefs)
+  // - Field mappings: Calendar View doctype or default config
+  // TODO: Implement full Calendar View doctype loading
+  // TODO: Use localStorage for cal_defaultView and cal_weekends
+  
   // Calendar state
   const [currentDate, setCurrentDate] = React.useState(new Date())
   

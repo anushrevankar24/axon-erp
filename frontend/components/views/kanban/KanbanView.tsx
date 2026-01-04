@@ -25,7 +25,15 @@ export function KanbanView({ doctype }: KanbanViewProps) {
   const { data: meta, isLoading: metaLoading } = useMeta(doctype)
   const { data: userSettings } = useUserSettings(doctype)
   
-  // Get kanban field from user settings or default to "status"
+  // DESK PARITY NOTE: Kanban settings are stored in Kanban Board doctype, not user_settings.
+  // user_settings only stores last_kanban_board for routing.
+  // For now, we use fallback defaults until full Kanban Board integration is implemented.
+  
+  // TODO: Load Kanban Board doc based on route or last_kanban_board
+  // TODO: Use board.field_name for kanban grouping
+  // TODO: Use board.fields for display fields
+  // TODO: Use board.filters for filtering
+  
   const kanbanField = userSettings?.Kanban?.kanban_column_field || 'status'
   const kanbanDisplayFields = userSettings?.Kanban?.kanban_fields || []
   

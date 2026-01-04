@@ -14,7 +14,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { formatDistanceToNow } from "date-fns"
 import { Badge } from "@/components/ui/badge"
 import { useUserSettings } from "@/lib/user-settings/react"
-import { saveListFilters, saveListSort, saveListPageLength } from "@/lib/user-settings/helpers"
+import { saveListFilters, saveListSort, saveLastView } from "@/lib/user-settings/helpers"
 
 interface ListViewProps {
   doctype: string
@@ -30,36 +30,55 @@ export function ListView({ doctype }: ListViewProps) {
   // Fetch user_settings for this DocType
   const { data: userSettings } = useUserSettings(doctype)
   
-  // State management - initialize from user_settings where available
+  // Track if settings have been applied (Desk parity: apply once on init)
+  const didInitRef = React.useRef(false)
+  
+  // State management - will be initialized from user_settings once
   const [filters, setFilters] = React.useState<Record<string, any>>({})
   const [searchText, setSearchText] = React.useState("")
-  const [sortBy, setSortBy] = React.useState(userSettings?.List?.order_by?.split(' ')[0] || "modified")
-  const [sortOrder, setSortOrder] = React.useState<"asc" | "desc">(
-    userSettings?.List?.order_by?.includes('asc') ? 'asc' : 'desc'
-  )
+  const [sortBy, setSortBy] = React.useState("modified")
+  const [sortOrder, setSortOrder] = React.useState<"asc" | "desc">("desc")
   const [currentPage, setCurrentPage] = React.useState(1)
-  const [pageSize, setPageSize] = React.useState(userSettings?.List?.page_length || 20)
+  const [pageSize, setPageSize] = React.useState(20)
   const [selectedRows, setSelectedRows] = React.useState<string[]>([])
 
   // Fetch metadata
   const { data: meta, isLoading: metaLoading} = useMeta(doctype)
   
-  // Persist sort changes
+  // Apply user_settings once when they load (DESK PARITY)
   React.useEffect(() => {
-    const orderBy = `${sortBy} ${sortOrder}`
-    saveListSort(doctype, orderBy).catch(err => {
+    if (userSettings?.List && !didInitRef.current) {
+      didInitRef.current = true
+      
+      // Apply saved sort (DESK PARITY: sort_by and sort_order)
+      if (userSettings.List.sort_by) {
+        setSortBy(userSettings.List.sort_by)
+      }
+      if (userSettings.List.sort_order) {
+        setSortOrder(userSettings.List.sort_order as "asc" | "desc")
+      }
+      
+      // Note: filters would be applied here when we implement Desk filter tuples
+    }
+  }, [userSettings, doctype])
+  
+  // Save last_view (DESK PARITY: top-level key)
+  React.useEffect(() => {
+    if (didInitRef.current) {
+      saveLastView(doctype, 'List').catch(err => {
+        console.error('[ListView] Failed to save last_view:', err)
+      })
+    }
+  }, [doctype])
+  
+  // Persist sort changes (DESK PARITY: sort_by and sort_order)
+  React.useEffect(() => {
+    if (!didInitRef.current) return // Don't save during init
+    
+    saveListSort(doctype, sortBy, sortOrder).catch(err => {
       console.error('[ListView] Failed to save sort:', err)
     })
   }, [sortBy, sortOrder, doctype])
-  
-  // Persist page length changes
-  React.useEffect(() => {
-    if (pageSize !== 20) {  // Only save if non-default
-      saveListPageLength(doctype, pageSize).catch(err => {
-        console.error('[ListView] Failed to save page length:', err)
-      })
-    }
-  }, [pageSize, doctype])
 
   // Fetch list data
   const { data: listData, isLoading: listLoading, refetch } = useListData({

@@ -24,16 +24,20 @@
 
 export interface FormSettings {
   /**
-   * Collapsed sections state
-   * Maps section fieldname → collapsed (true/false)
-   * Desk source: frappe/public/js/frappe/form/layout.js
+   * DESK PARITY NOTE: Collapsed sections are NOT stored in __UserSettings in standard Desk.
+   * They are stored in localStorage using df.css_class + "-closed" key.
+   * This interface field is kept for compatibility with extended/custom implementations.
+   * 
+   * @deprecated Use localStorage with css_class key for Desk parity
    */
   collapsed_sections?: Record<string, boolean>
   
   /**
-   * Active tab for tabbed layouts
-   * Stores the fieldname of the currently active Tab Break
-   * Desk source: frappe/public/js/frappe/form/layout.js
+   * DESK PARITY NOTE: Active tab is NOT stored in __UserSettings in standard Desk.
+   * It is kept in-memory via active_tab_map[docname].
+   * This interface field is kept for compatibility with extended/custom implementations.
+   * 
+   * @deprecated Use in-memory map for Desk parity
    */
   active_tab?: string
 }
@@ -83,31 +87,37 @@ export interface ListFilter {
 
 export interface ListSettings {
   /**
-   * Saved filters
-   * Desk source: frappe/public/js/frappe/list/list_view.js
+   * Saved filters (Desk format: array of 4-element tuples)
+   * Desk source: frappe/public/js/frappe/list/list_view.js:618
    */
   filters?: ListFilter[]
   
   /**
-   * Sort order (e.g., "modified desc", "creation asc")
+   * Sort field name (DESK PARITY: separate from sort_order)
+   * Desk source: frappe/public/js/frappe/list/list_view.js:619
+   * Example: "modified", "creation", "item_name"
    */
-  order_by?: string
+  sort_by?: string
+  
+  /**
+   * Sort direction (DESK PARITY: "asc" or "desc")
+   * Desk source: frappe/public/js/frappe/list/list_view.js:620
+   */
+  sort_order?: string
   
   /**
    * Visible columns/fields
+   * Desk source: frappe/public/js/frappe/list/list_view.js (less common)
    */
   fields?: string[]
   
   /**
-   * Page length (20, 100, 500, etc.)
+   * DESK PARITY NOTE: page_length is NOT persisted via user_settings in Desk.
+   * Desk sets it at runtime: frappe.is_large_screen() ? 100 : 20
+   * 
+   * @deprecated Do not use for Desk parity
    */
   page_length?: number
-  
-  /**
-   * Last view state (e.g., "List", "Report", "Dashboard")
-   * Some DocTypes support multiple list presentations
-   */
-  last_view?: string
 }
 
 // ============================================================================
@@ -116,18 +126,26 @@ export interface ListSettings {
 
 export interface KanbanSettings {
   /**
-   * Kanban board settings
-   * Desk source: frappe/public/js/frappe/views/kanban/kanban_view.js
+   * Last viewed Kanban Board name (DESK PARITY)
+   * Desk source: frappe/public/js/frappe/views/kanban/kanban_view.js:171-173
+   * 
+   * DESK PARITY NOTE: Filters and fields are stored in the Kanban Board doctype,
+   * NOT in __UserSettings. Only the board name is stored here.
+   */
+  last_kanban_board?: string
+  
+  /**
+   * @deprecated Filters are stored in Kanban Board doctype for Desk parity
    */
   filters?: ListFilter[]
   
   /**
-   * Field to use for kanban columns (Status, Priority, etc.)
+   * @deprecated Column field is defined in Kanban Board doctype for Desk parity
    */
   kanban_column_field?: string
   
   /**
-   * Fields to display on kanban cards
+   * @deprecated Fields are stored in Kanban Board doctype for Desk parity
    */
   kanban_fields?: string[]
 }
@@ -138,25 +156,35 @@ export interface KanbanSettings {
 
 export interface CalendarSettings {
   /**
-   * Calendar view settings
-   * Desk source: frappe/public/js/frappe/views/calendar/calendar.js
+   * Last viewed Calendar name (DESK PARITY)
+   * Desk source: frappe/public/js/frappe/views/calendar/calendar.js:45-47
+   * 
+   * DESK PARITY NOTE: 
+   * - UI prefs (defaultView, weekends) are stored in localStorage (cal_defaultView, cal_weekends)
+   * - Field mappings come from Calendar View doctype or default calendar config
+   * - NOT stored in __UserSettings
    */
-  filters?: ListFilter[]
+  last_calendar?: string
   
   /**
-   * Field to use for event start date
+   * @deprecated Date fields are defined in Calendar View doctype for Desk parity
    */
   start_date_field?: string
   
   /**
-   * Field to use for event end date (optional)
+   * @deprecated Date fields are defined in Calendar View doctype for Desk parity
    */
   end_date_field?: string
   
   /**
-   * Field to group calendar events by
+   * @deprecated Group-by is defined in Calendar View doctype for Desk parity
    */
   group_by_field?: string
+  
+  /**
+   * @deprecated Filters managed by Calendar View doctype for Desk parity
+   */
+  filters?: ListFilter[]
 }
 
 // ============================================================================
@@ -165,25 +193,38 @@ export interface CalendarSettings {
 
 export interface GanttSettings {
   /**
-   * Gantt chart settings
-   * Desk source: frappe/public/js/frappe/views/gantt/gantt_view.js
+   * Gantt view mode (DESK PARITY)
+   * Desk source: frappe/public/js/frappe/views/gantt/gantt_view.js:91,135-137
+   * Values: "Day", "Week", "Month", "Year", "Half Day", "Quarter Day"
    */
-  filters?: ListFilter[]
+  gantt_view_mode?: string
   
   /**
-   * Field to use for task start
+   * Sort field (DESK PARITY: inherited from ListView)
+   * Desk source: frappe/public/js/frappe/views/gantt/gantt_view.js:22
+   */
+  sort_by?: string
+  
+  /**
+   * Sort order (DESK PARITY: inherited from ListView)
+   * Desk source: frappe/public/js/frappe/views/gantt/gantt_view.js:23
+   */
+  sort_order?: string
+  
+  /**
+   * @deprecated Date fields are defined in calendar_settings or meta for Desk parity
    */
   start_date_field?: string
   
   /**
-   * Field to use for task end
+   * @deprecated Date fields are defined in calendar_settings or meta for Desk parity
    */
   end_date_field?: string
   
   /**
-   * View mode (Day, Week, Month, Year)
+   * @deprecated Filters managed by view for Desk parity
    */
-  view_mode?: string
+  filters?: ListFilter[]
 }
 
 // ============================================================================
@@ -214,13 +255,30 @@ export interface ImageSettings {
 
 export interface InboxSettings {
   /**
-   * Inbox/communications view settings
-   * Used for email/communication views in Desk
+   * Last viewed email account (DESK PARITY)
+   * Desk source: frappe/public/js/frappe/views/inbox/inbox_view.js:40-42
+   */
+  last_email_account?: string
+  
+  /**
+   * Sort field (DESK PARITY: inherited from ListView)
+   * Desk source: frappe/public/js/frappe/views/inbox/inbox_view.js:49
+   */
+  sort_by?: string
+  
+  /**
+   * Sort order (DESK PARITY: inherited from ListView)
+   * Desk source: frappe/public/js/frappe/views/inbox/inbox_view.js:50
+   */
+  sort_order?: string
+  
+  /**
+   * @deprecated Filters are route-driven in Desk Inbox
    */
   filters?: ListFilter[]
   
   /**
-   * Inbox view mode or grouping
+   * @deprecated View mode not persisted in standard Desk
    */
   inbox_view?: string
 }
@@ -267,6 +325,13 @@ export interface ReportSettings {
  * Each DocType can have settings for different view types.
  */
 export interface UserSettings {
+  /**
+   * Last view name for routing (DESK PARITY: top-level key)
+   * Desk source: list_view.js:616
+   * Values: "List", "Report", "Dashboard", "Kanban", "Calendar", "Gantt", etc.
+   */
+  last_view?: string
+  
   Form?: FormSettings
   GridView?: GridViewSettings
   List?: ListSettings

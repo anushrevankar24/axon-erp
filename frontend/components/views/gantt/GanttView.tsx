@@ -26,10 +26,13 @@ export function GanttView({ doctype }: GanttViewProps) {
   const { data: meta, isLoading: metaLoading } = useMeta(doctype)
   const { data: userSettings } = useUserSettings(doctype)
   
-  // Get date fields from user settings or defaults
+  // DESK PARITY: Use gantt_view_mode from user_settings
+  const viewMode: ViewMode = (userSettings?.Gantt?.gantt_view_mode as ViewMode) || 'Month'
+  
+  // DESK PARITY NOTE: Date fields come from calendar_settings or meta, not user_settings
+  // TODO: Load from frappe.views.calendar[doctype] config or calendar_settings
   const startDateField = userSettings?.Gantt?.start_date_field || 'start_date'
   const endDateField = userSettings?.Gantt?.end_date_field || 'end_date'
-  const viewMode: ViewMode = (userSettings?.Gantt?.view_mode as ViewMode) || 'Month'
   
   const [currentDate, setCurrentDate] = React.useState(new Date())
   

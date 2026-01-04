@@ -42,12 +42,27 @@ export function ReportView({ reportName }: ReportViewProps) {
     }
   })
   
-  // Persist filter changes
+  // Track if settings have been applied (Desk parity: apply once on init)
+  const didInitRef = React.useRef(false)
+  
+  // Apply user_settings once when they load (Desk parity)
   React.useEffect(() => {
+    if (userSettings?.Report && !didInitRef.current) {
+      didInitRef.current = true
+      
+      // Apply saved filters if any
+      if (userSettings.Report.filters) {
+        setFilters(userSettings.Report.filters)
+      }
+    }
+  }, [userSettings])
+  
+  // Persist filter changes (Desk-style: only save when user changes, not on init)
+  React.useEffect(() => {
+    if (!didInitRef.current) return // Don't save during init
+    
     if (Object.keys(filters).length > 0) {
-      saveUserSettings(reportName, {
-        Report: { filters }
-      }).catch(err => {
+      saveUserSettings(reportName, 'Report', { filters }).catch(err => {
         console.error('[ReportView] Failed to save filters:', err)
       })
     }

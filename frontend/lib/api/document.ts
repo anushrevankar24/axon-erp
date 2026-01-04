@@ -12,6 +12,7 @@
 
 import { call } from './client'
 import { parseFrappeError, type FrappeError } from '@/lib/utils/errors'
+import { parseUserSettings } from '@/lib/user-settings/normalize'
 
 // ============================================================================
 // Types
@@ -241,10 +242,13 @@ export async function getDocType(
 
     // Response structure from getdoctype:
     // - result.docs: Array of DocType metas (main + child tables)
-    // - result.user_settings: User-specific settings
+    // - result.user_settings: User-specific settings (JSON string from __UserSettings.data)
     const docs = result.docs || result.message?.docs || []
     const meta = docs[0] // First doc is the main DocType
-    const userSettings = result.user_settings || result.message?.user_settings
+    const rawUserSettings = result.user_settings || result.message?.user_settings
+    
+    // Parse user_settings (Frappe returns JSON string from __UserSettings.data)
+    const userSettings = parseUserSettings(rawUserSettings)
 
     return {
       success: true,

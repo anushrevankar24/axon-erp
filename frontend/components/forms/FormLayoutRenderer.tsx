@@ -10,10 +10,15 @@ import { evaluateDependsOnValue } from '@/lib/utils/evaluate-depends-on'
 import type { DependencyStateMap } from '@/lib/form/dependency_state'
 import { useFrappeRuntimeVersion } from '@/lib/frappe-runtime/react'
 import { isNullOrEmpty } from '@/lib/utils/validation'
-import { saveUserSettings } from '@/lib/user-settings/service'
 import { useBoot } from '@/lib/api/hooks'
 import { calculatePermissions, getFieldDisplayStatus, applyDependencyOverrides } from '@/lib/utils/field-permissions'
 import { getBootUserRoles } from '@/lib/utils/boot'
+
+function isUserSettingsDebugEnabled(): boolean {
+  if (process.env.NODE_ENV !== 'development') return false
+  if (typeof window === 'undefined') return false
+  return localStorage.getItem('debug_user_settings') === '1'
+}
 
 interface Section {
   fieldname?: string
@@ -23,6 +28,7 @@ interface Section {
   collapsible?: boolean
   collapsible_depends_on?: string
   collapsed?: boolean
+  css_class?: string  // Desk parity: for localStorage persistence
   columns: Field[][]
 }
 
@@ -54,14 +60,13 @@ interface FormLayoutRendererProps {
   docinfo?: any  // Desk parity: docinfo.permissions for field visibility
 }
 
+// In-memory active tab map (Desk parity: not persisted to __UserSettings)
+// Key format: `${doctype}::${docname}` to avoid collisions
+const activeTabMap = new Map<string, string>()
+
 export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, userSettings, docinfo }: FormLayoutRendererProps) {
   const runtimeVersion = useFrappeRuntimeVersion()
   const { data: boot } = useBoot()
-  
-  // Track collapsed sections for persistence
-  const [collapsedSectionsState, setCollapsedSectionsState] = React.useState<Record<string, boolean>>({})
-  // Track active tab
-  const [activeTab, setActiveTab] = React.useState<string | null>(null)
   
   // Parse fields into tabs (3-level hierarchy: Tab → Section → Column)
   const tabs = React.useMemo(() => parseFieldsIntoTabs(fields), [fields])
@@ -128,34 +133,8 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, u
     return <div className="p-4 text-muted-foreground text-sm">No fields to display</div>
   }
   
-  // Debounced save of collapsed sections and active tab
-  React.useEffect(() => {
-    if (!meta?.name) return
-    
-    const hasUpdates = Object.keys(collapsedSectionsState).length > 0 || activeTab !== null
-    if (!hasUpdates) return
-    
-    const updates: any = {}
-    
-    if (Object.keys(collapsedSectionsState).length > 0) {
-      updates.Form = {
-        ...updates.Form,
-        collapsed_sections: collapsedSectionsState
-      }
-    }
-    
-    if (activeTab !== null) {
-      updates.Form = {
-        ...updates.Form,
-        active_tab: activeTab
-      }
-    }
-    
-    // Use service's debounced save
-    saveUserSettings(meta.name, updates).catch(err => {
-      console.error('[FormLayoutRenderer] Failed to save user settings:', err)
-    })
-  }, [collapsedSectionsState, activeTab, meta?.name])
+  // Build doc identity key for active tab map (Desk pattern)
+  const docIdentity = meta?.name && doc?.name ? `${meta.name}::${doc.name}` : null
   
   // If only one tab (no Tab Breaks), render without tabs UI
   if (tabsWithPermissions.length === 1) {
@@ -173,14 +152,6 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, u
               dependencyState={dependencyState}
               userSettings={userSettings}
               docinfo={docinfo}
-              onCollapsedChange={(collapsed) => {
-                if (section.fieldname) {
-                  setCollapsedSectionsState(prev => ({
-                    ...prev,
-                    [section.fieldname!]: collapsed
-                  }))
-                }
-              }}
             />
           )
         )}
@@ -189,15 +160,22 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, u
   }
   
   // Multiple tabs - render with tabs UI
-  // Restore active tab from user_settings or default to first tab
-  const savedActiveTab = userSettings?.Form?.active_tab
+  // Restore active tab from in-memory map (Desk parity)
+  const savedActiveTab = docIdentity ? activeTabMap.get(docIdentity) : null
   const defaultTab = savedActiveTab || tabsWithPermissions[0].fieldname || '0'
+  
+  // Save active tab to in-memory map when it changes (Desk parity)
+  const handleTabChange = (value: string) => {
+    if (docIdentity) {
+      activeTabMap.set(docIdentity, value)
+    }
+  }
   
   return (
     <Tabs 
       defaultValue={defaultTab} 
       className="w-full"
-      onValueChange={(value) => setActiveTab(value)}
+      onValueChange={handleTabChange}
     >
       <TabsList>
         {tabsWithPermissions.map((tab, index) => (
@@ -222,14 +200,6 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, u
                   dependencyState={dependencyState}
                   userSettings={userSettings}
                   docinfo={docinfo}
-                  onCollapsedChange={(collapsed) => {
-                    if (section.fieldname) {
-                      setCollapsedSectionsState(prev => ({
-                        ...prev,
-                        [section.fieldname!]: collapsed
-                      }))
-                    }
-                  }}
                 />
               )
             )}
@@ -288,6 +258,7 @@ function parseFieldsIntoTabs(fields: Field[]): FormTab[] {
         hidden: field.hidden,
         collapsible: field.collapsible === 1,
         collapsible_depends_on: field.collapsible_depends_on,
+        css_class: field.css_class,  // Desk parity: for localStorage persistence
         // ERPNext Desk parity: collapsible sections default to collapsed (true)
         collapsed: field.collapsible === 1,
         columns: [[]]
@@ -375,8 +346,7 @@ function FormSection({
   meta,
   dependencyState,
   userSettings,
-  docinfo,
-  onCollapsedChange
+  docinfo
 }: { 
   section: Section
   sectionIndex: number
@@ -386,7 +356,6 @@ function FormSection({
   dependencyState?: DependencyStateMap
   userSettings?: any
   docinfo?: any
-  onCollapsedChange?: (collapsed: boolean) => void
 }) {
   const collapsedByDependency = (section as any).collapsed_due_to_dependency
   
@@ -418,21 +387,28 @@ function FormSection({
     return false
   }, [section, doc, dependencyState])
   
-  // Compute initial collapsed state:
+  // Compute initial collapsed state (Desk parity):
   // 1. If collapsible_depends_on evaluated, use that
-  // 2. Else use section.collapsed (defaults to true for collapsible sections)
-  // 3. But if has missing mandatory, force open
-  const initialCollapsed = collapsedByDependency !== undefined 
-    ? collapsedByDependency 
-    : section.collapsed
+  // 2. Else check localStorage (using df.css_class + "-closed")
+  // 3. Else use section.collapsed (defaults to true for collapsible sections)
+  // 4. But if has missing mandatory, force open
+  const initialCollapsed = React.useMemo(() => {
+    if (collapsedByDependency !== undefined) {
+      return collapsedByDependency
+    }
+    
+    // Desk parity: check localStorage using css_class
+    if (section.css_class && typeof window !== 'undefined') {
+      const stored = localStorage.getItem(section.css_class + '-closed')
+      // Desk stores '' (open) or '1' (closed). Treat null as \"no preference\".
+      if (stored !== null) return stored === '1'
+    }
+    
+    // Default: collapsed for collapsible sections
+    return section.collapsed || false
+  }, [section.css_class, section.collapsed, collapsedByDependency])
   
-  // Check user_settings for saved collapsed state
-  const userCollapsedState = userSettings?.Form?.collapsed_sections?.[section.fieldname!]
-  const effectiveInitialCollapsed = userCollapsedState !== undefined 
-    ? userCollapsedState 
-    : initialCollapsed
-  
-  const [isOpen, setIsOpen] = React.useState(!effectiveInitialCollapsed || hasMissingMandatory)
+  const [isOpen, setIsOpen] = React.useState(!initialCollapsed || hasMissingMandatory)
 
   // Re-evaluate when dependency or mandatory state changes
   React.useEffect(() => {
@@ -443,10 +419,14 @@ function FormSection({
     }
   }, [collapsedByDependency, hasMissingMandatory])
   
-  // Notify parent when collapsed state changes (for persistence)
+  // Handle collapse/expand changes (Desk parity: save to localStorage)
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open)
-    onCollapsedChange?.(!open)
+    
+    // Persist to localStorage using css_class (Desk parity)
+    if (section.css_class && typeof window !== 'undefined') {
+      localStorage.setItem(section.css_class + '-closed', open ? '' : '1')
+    }
   }
   
   // Filter empty columns
