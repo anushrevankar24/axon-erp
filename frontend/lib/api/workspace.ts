@@ -7,6 +7,7 @@ import type {
   BootData
 } from '@/lib/types/workspace'
 import { findWorkspace } from '@/lib/utils/workspace'
+import { getBootUserObject, getBootUserRoles } from '@/lib/utils/boot'
 
 /**
  * Use workspaces from boot data (ERPNext pattern)
@@ -16,12 +17,14 @@ import { findWorkspace } from '@/lib/utils/workspace'
  */
 export function useWorkspaces() {
   const { data: boot, isLoading, error } = useBoot()
+  const user = getBootUserObject(boot)
+  const roles = getBootUserRoles(boot)
   
   return {
     data: {
       pages: boot?.allowed_workspaces || [],
-      has_access: boot?.user?.roles?.includes('Workspace Manager') || false,
-      has_create_access: boot?.user?.can_create?.includes('Workspace') || false
+      has_access: roles.includes('Workspace Manager') || false,
+      has_create_access: user?.can_create?.includes('Workspace') || false
     },
     isLoading,
     error

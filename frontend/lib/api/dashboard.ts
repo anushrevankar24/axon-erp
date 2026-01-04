@@ -41,16 +41,27 @@ export async function getDocumentLinks(doctype: string, docname: string) {
   }
 }
 
-// Get comments and activity
+// Get comments and activity - Desk parity using docinfo
 export async function getTimeline(doctype: string, docname: string) {
   try {
-    const response = await call('frappe.desk.form.load.get_communications', {
+    const response = await call('frappe.desk.form.load.get_docinfo', {
       doctype,
-      name: docname,
-      start: 0,
-      limit: 20
+      name: docname
     })
-    return response?.message || []
+    const docinfo = response?.message || response?.docinfo || {}
+    
+    // Desk parity: comments from Comment doctype (has comment_type)
+    const comments = (docinfo.comments || []).map((c: any) => ({
+      ...c,
+      // Normalize for ActivityList component
+      _type: 'comment'
+    }))
+    
+    // Communications for activity timeline (has communication_type)
+    const communications = docinfo.communications || []
+    
+    // Return combined timeline (comments first, then communications)
+    return [...comments, ...communications]
   } catch (error) {
     // Silently fail for new documents
     return []

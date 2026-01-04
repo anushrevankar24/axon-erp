@@ -15,6 +15,7 @@ interface QuickEntryInlineProps {
   meta: any
   dependencyState?: any
   userSettings?: any
+  docinfo?: any
   onEditFullForm: () => void
 }
 
@@ -31,6 +32,7 @@ export function QuickEntryInline({
   meta,
   dependencyState,
   userSettings,
+  docinfo,
   onEditFullForm
 }: QuickEntryInlineProps) {
   return (
@@ -68,6 +70,7 @@ export function QuickEntryInline({
                   meta={meta}
                   dependencyState={dependencyState}
                   userSettings={userSettings}
+                  docinfo={docinfo}
                 />
               </div>
             ))}

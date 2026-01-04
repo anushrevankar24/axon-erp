@@ -1,0 +1,122 @@
+.page {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.container {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.headerRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.main {
+  min-width: 0;
+}
+
+.performanceGraphs {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.card {
+  padding: 16px;
+  border-radius: 14px;
+}
+
+.titleArea {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.cardTitle {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.cardOptions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chartWrapper {
+  width: 100%;
+}
+
+.nullState {
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--muted-foreground));
+  font-size: 14px;
+}
+
+.recentActivity {
+  padding-bottom: 60px;
+  margin-top: 8px;
+}
+
+.recentActivityTitle {
+  font-weight: 700;
+  font-size: 18px;
+  color: hsl(var(--foreground));
+  margin-bottom: 12px;
+}
+
+.showMoreBtn {
+  display: block;
+  margin: 35px auto 0;
+  width: max-content;
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 16px;
+  }
+  .title {
+    font-size: 20px;
+  }
+  .layout {
+    gap: 16px;
+  }
+  .performanceGraphs {
+    gap: 16px;
+  }
+}
+
+

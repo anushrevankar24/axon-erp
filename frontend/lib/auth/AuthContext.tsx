@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { call } from '@/lib/api/client'
 import { useBoot } from '@/lib/api/hooks'
 import { setBoot as setFrappeRuntimeBoot, setDocFetcher } from '@/lib/frappe-runtime'
+import { getBootUserId, isGuest } from '@/lib/utils/boot'
 
 interface AuthContextType {
   user: any | null
@@ -41,7 +42,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (error) {
-      const status = (error as any)?.response?.status
+      // useBoot uses fetch; errors won't have axios response object.
+      // We attach status to the thrown Error in useBoot for correct session-expiry handling.
+      const status = (error as any)?.status ?? (error as any)?.response?.status
       // Session expired or unauthorized
       if (status === 401 || status === 403) {
         setIsAuthenticated(false)
@@ -54,11 +57,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
     
-    // User is authenticated if boot has user and not Guest
-    if (boot?.user && boot.user !== 'Guest') {
+    const userId = getBootUserId(boot)
+    // Desk parity: boot.user is an object; identity is boot.user.name
+    if (userId && !isGuest(boot)) {
       setIsAuthenticated(true)
-    } else if (boot?.user === 'Guest') {
+      // If user is already authenticated, don't keep them on login page
+      if (typeof window !== 'undefined' && window.location.pathname.includes('/login')) {
+        router.push('/app/home')
+      }
+
+      // Prime CSRF token for this tab if missing (avoids first POST failing with CSRFTokenError)
+      if (typeof window !== 'undefined' && !window.csrf_token) {
+        fetch('/api/method/axon_erp.api.get_csrf_token', {
+          method: 'GET',
+          credentials: 'include',
+          headers: { 'Accept': 'application/json' }
+        })
+          .then(r => (r.ok ? r.json() : null))
+          .then(data => {
+            const csrfToken = (data as any)?.message?.csrf_token
+            if (csrfToken) {
+              window.csrf_token = csrfToken
+              sessionStorage.setItem('frappe_csrf_token', csrfToken)
+            }
+          })
+          .catch(() => {
+            // ignore; interceptor will recover on-demand
+          })
+      }
+    } else if (boot && isGuest(boot)) {
       setIsAuthenticated(false)
+      // If user is Guest, ensure we are on login/setup pages
+      if (typeof window !== 'undefined' && 
+          !window.location.pathname.includes('/login') && 
+          !window.location.pathname.includes('/setup')) {
+        router.push('/login')
+      }
     }
   }, [boot, error, router])
 
@@ -88,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== 'undefined') {
         delete window.csrf_token
       }
-      localStorage.removeItem('frappe_csrf_token')
+      sessionStorage.removeItem('frappe_csrf_token')
       
       // Redirect to login (full page reload to clear all state)
       window.location.href = '/login'

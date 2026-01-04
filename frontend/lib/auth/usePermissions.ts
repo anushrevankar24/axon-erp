@@ -1,4 +1,5 @@
 import { useBoot } from '@/lib/api/hooks'
+import { getBootUserObject, isGuest } from '@/lib/utils/boot'
 
 /**
  * usePermissions Hook - Check user permissions
@@ -26,37 +27,38 @@ export function usePermissions() {
     doctype: string, 
     ptype: 'read' | 'write' | 'create' | 'delete' | 'submit' | 'cancel' | 'print' | 'email' | 'import' | 'export' = 'read'
   ): boolean => {
-    if (!boot?.user || boot.user === 'Guest') {
+    const user = getBootUserObject(boot)
+    if (!user || isGuest(boot)) {
       return false
     }
     
     // Administrator has all permissions (ERPNext pattern)
-    if (boot.user.name === 'Administrator') {
+    if (user.name === 'Administrator') {
       return true
     }
     
     // Check permission from boot data
     switch (ptype) {
       case 'read':
-        return boot.user.can_read?.includes(doctype) || false
+        return user.can_read?.includes(doctype) || false
       case 'write':
-        return boot.user.can_write?.includes(doctype) || false
+        return user.can_write?.includes(doctype) || false
       case 'create':
-        return boot.user.can_create?.includes(doctype) || false
+        return user.can_create?.includes(doctype) || false
       case 'delete':
-        return boot.user.can_delete?.includes(doctype) || false
+        return user.can_delete?.includes(doctype) || false
       case 'submit':
-        return boot.user.can_submit?.includes(doctype) || false
+        return user.can_submit?.includes(doctype) || false
       case 'cancel':
-        return boot.user.can_cancel?.includes(doctype) || false
+        return user.can_cancel?.includes(doctype) || false
       case 'print':
-        return boot.user.can_print?.includes(doctype) || false
+        return user.can_print?.includes(doctype) || false
       case 'email':
-        return boot.user.can_email?.includes(doctype) || false
+        return user.can_email?.includes(doctype) || false
       case 'import':
-        return boot.user.can_import?.includes(doctype) || false
+        return user.can_import?.includes(doctype) || false
       case 'export':
-        return boot.user.can_export?.includes(doctype) || false
+        return user.can_export?.includes(doctype) || false
       default:
         return false
     }

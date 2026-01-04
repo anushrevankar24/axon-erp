@@ -203,3 +203,4 @@ export function isEmptySettings(settings: UserSettings): boolean {
   return Object.keys(settings).length === 0
 }
 
+

@@ -20,6 +20,7 @@ import {
 import { getTimeline, addComment } from "@/lib/api/dashboard"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
+import DOMPurify from "dompurify"
 
 interface FormTimelineProps {
   doctype: string
@@ -162,7 +163,10 @@ function CommentsList({ doctype, docname }: { doctype: string, docname: string }
     )
   }
 
-  const comments = timeline?.filter((item: any) => item.comment_type === 'Comment') || []
+  // Desk parity: filter by comment_type for Comment doctype entries (from docinfo.comments)
+  const comments = timeline?.filter((item: any) => 
+    item.comment_type === 'Comment' || item._type === 'comment'
+  ) || []
 
   if (comments.length === 0) {
     return (
@@ -183,6 +187,13 @@ function CommentsList({ doctype, docname }: { doctype: string, docname: string }
 }
 
 function CommentItem({ comment }: { comment: any }) {
+  const safeHtml = React.useMemo(() => {
+    const html = comment?.content || ""
+    // Desk parity: comment content is stored/rendered as HTML (Quill/markdown output).
+    // Sanitize to prevent XSS while preserving formatting.
+    return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+  }, [comment?.content])
+
   return (
     <div className="flex gap-3 py-4">
       <Avatar className="h-10 w-10">
@@ -209,9 +220,10 @@ function CommentItem({ comment }: { comment: any }) {
             </Button>
           </div>
         </div>
-        <div className="text-sm text-foreground bg-muted/30 rounded p-3">
-          {comment.content}
-        </div>
+        <div
+          className="text-sm text-foreground bg-muted/30 rounded p-3 prose prose-sm max-w-none"
+          dangerouslySetInnerHTML={{ __html: safeHtml }}
+        />
       </div>
     </div>
   )

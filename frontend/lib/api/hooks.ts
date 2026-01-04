@@ -22,6 +22,7 @@ import {
   type DocumentSaveResult 
 } from './document'
 import { DocTypeMeta, DocInfo } from '@/lib/types/metadata'
+import { isGuest } from '@/lib/utils/boot'
 
 // ============================================================================
 // DocType Metadata Hooks
@@ -194,12 +195,17 @@ export function useDoc(doctype: string, name?: string) {
 
 /**
  * Fetch document with docinfo (for document view with timeline, attachments, etc.)
+ * Desk parity: always use this for existing documents to get docinfo.permissions
  */
 export function useDocWithInfo(doctype: string, name?: string) {
   return useQuery({
     queryKey: ['doc-with-info', doctype, name],
     queryFn: async () => {
-      const result = await getDocument(doctype, name!)
+      if (!name || name === 'new') {
+        return null
+      }
+      
+      const result = await getDocument(doctype, name)
       
       if (!result.success) {
         if (result.error?.type === 'not_found') {
@@ -213,7 +219,7 @@ export function useDocWithInfo(doctype: string, name?: string) {
         docinfo: result.docinfo
       }
     },
-    enabled: !!name && name !== 'new',
+    enabled: !!doctype && !!name && name !== 'new',
     retry: 1,
   })
 }
@@ -223,6 +229,9 @@ export function useDocWithInfo(doctype: string, name?: string) {
  * Uses frappe.desk.reportview.get_list for full functionality
  */
 export function useDocList(doctype: string, filters?: any) {
+  const { data: boot } = useBoot()
+  const isAuthenticated = !!boot && !isGuest(boot)
+
   return useQuery({
     queryKey: ['list', doctype, filters],
     queryFn: async () => {
@@ -234,6 +243,7 @@ export function useDocList(doctype: string, filters?: any) {
       })
       return result
     },
+    enabled: !!doctype && isAuthenticated,
     retry: 1,
   })
 }
@@ -369,14 +379,30 @@ export function useDeleteDoc(doctype: string) {
  * but separate frontends need an API endpoint.
  * 
  * This is the standard pattern for Frappe mobile apps and third-party integrations.
+ * 
+ * Uses GET (not POST) to avoid CSRF dependency during bootstrap.
  */
 export function useBoot() {
   return useQuery({
     queryKey: ['boot'],
     queryFn: async () => {
-      // Call our wrapper which internally calls frappe.sessions.get()
-      const result = await call('axon_erp.api.get_boot')
-      return result.message || result
+      // Use GET to avoid CSRF requirement during bootstrap
+      const response = await fetch('/api/method/axon_erp.api.get_boot', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+        }
+      })
+      
+      if (!response.ok) {
+        const err = new Error(`Boot failed: ${response.status}`)
+        ;(err as any).status = response.status
+        throw err
+      }
+      
+      const data = await response.json()
+      return data.message || data
     },
     staleTime: 10 * 60 * 1000,  // Cache for 10 minutes
     refetchOnWindowFocus: false,

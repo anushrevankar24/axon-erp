@@ -1,5 +1,6 @@
 import { FrappeApp } from 'frappe-js-sdk'
 import { getBackendURL } from './utils'
+// (debug logging removed after root cause verification)
 
 /**
  * Frappe SDK Configuration
@@ -24,13 +25,48 @@ export const frappe = new FrappeApp(
 if (frappe.axios) {
   frappe.axios.defaults.withCredentials = true
   
-  // Initialize CSRF token from localStorage on app load
-  // This restores the token after page refresh
+  // Initialize CSRF token from sessionStorage on app load (per-tab persistence)
+  // This restores the token after page refresh within the same tab
   if (typeof window !== 'undefined') {
-    const storedToken = localStorage.getItem('frappe_csrf_token')
+    const storedToken = sessionStorage.getItem('frappe_csrf_token')
     if (storedToken) {
       window.csrf_token = storedToken
     }
+  }
+
+  // Helper to check if the browser is still logged in (cookie session still valid).
+  // This is used to distinguish true session expiry vs normal 403 PermissionError.
+  let lastAuthCheckAt = 0
+  let lastLoggedUser: string | null = null
+  let authCheckInFlight: Promise<string | null> | null = null
+  const getLoggedUser = async (): Promise<string | null> => {
+    if (typeof window === 'undefined') return null
+
+    const now = Date.now()
+    // Throttle checks to avoid spamming server on bursts of 403s
+    if (authCheckInFlight) return authCheckInFlight
+    if (now - lastAuthCheckAt < 2000) return lastLoggedUser
+
+    authCheckInFlight = (async () => {
+      try {
+        lastAuthCheckAt = Date.now()
+        const res = await fetch('/api/method/frappe.auth.get_logged_user', {
+          method: 'GET',
+          credentials: 'include',
+          headers: { 'Accept': 'application/json' }
+        })
+        if (!res.ok) return null
+        const data = await res.json()
+        lastLoggedUser = data?.message ?? null
+        return lastLoggedUser
+      } catch {
+        return null
+      } finally {
+        authCheckInFlight = null
+      }
+    })()
+
+    return authCheckInFlight
   }
   
   // Note: The Frappe JS SDK has built-in CSRF handling in its axios interceptor
@@ -44,25 +80,22 @@ if (frappe.axios) {
     async (error) => {
       const status = error.response?.status
       const url = error.config?.url || ''
-      
       // ============================================
       // HANDLE CSRF TOKEN EXPIRY/MISMATCH
       // ============================================
       if (status === 400 && error.response?.data?.exc_type === 'CSRFTokenError') {
         // Clear stale token
         delete window.csrf_token
-        localStorage.removeItem('frappe_csrf_token')
+        sessionStorage.removeItem('frappe_csrf_token')
         
-        // Try to fetch new token (only if we have a session)
-        const hasSid = typeof document !== 'undefined' && 
-                      document.cookie.split('; ').some(row => row.startsWith('sid='))
-        
-        if (hasSid && !url.includes('/login')) {
+        // Always attempt to fetch a fresh token; if session is gone, backend returns 401/403
+        // Note: Do NOT check for sid cookie (it's HttpOnly in Frappe)
+        if (!url.includes('/login')) {
           try {
             const response = await fetch('/api/method/axon_erp.api.get_csrf_token', {
-              method: 'POST',
+              method: 'GET',
               credentials: 'include',
-              headers: { 'Content-Type': 'application/json' }
+              headers: { 'Accept': 'application/json' }
             })
             
             if (response.ok) {
@@ -70,11 +103,10 @@ if (frappe.axios) {
               const newToken = data.message?.csrf_token
               
               if (newToken) {
-                // Store new token
+                // Store new token (memory + per-tab sessionStorage)
                 window.csrf_token = newToken
-                localStorage.setItem('frappe_csrf_token', newToken)
-                
-                // Retry the original request
+                sessionStorage.setItem('frappe_csrf_token', newToken)
+                // Retry the original request once
                 return frappe.axios.request(error.config)
               }
             }
@@ -90,6 +122,7 @@ if (frappe.axios) {
       // Pattern from: frappe/request.js statusCode[401] and statusCode[403]
       // ============================================
       if (status === 401 || status === 403) {
+        const excType = error.response?.data?.exc_type
         // Don't redirect if we're already on login page or calling login/logout
         const isAuthEndpoint = url.includes('/login') || url.includes('/logout')
         const isLoginPage = typeof window !== 'undefined' && 
@@ -110,11 +143,24 @@ if (frappe.axios) {
         
         // Only redirect on REAL session expiry, not permission denied for optional features
         if (!isAuthEndpoint && !isLoginPage && !isAlreadyRedirecting && !isOptionalFeature) {
+          // Many Frappe endpoints return 403 for normal permission errors (not session expiry).
+          // If backend explicitly says PermissionError, do NOT redirect.
+          if (status === 403 && excType === 'PermissionError') {
+            return Promise.reject(error)
+          }
+
+          // If still logged in (cookie session valid), this 401/403 is not session expiry.
+          // This avoids redirecting users to login due to ordinary permission issues.
+          const loggedUser = await getLoggedUser()
+          if (loggedUser && loggedUser !== 'Guest') {
+            return Promise.reject(error)
+          }
+
           // Clear CSRF token (it's tied to the expired session)
           if (typeof window !== 'undefined') {
             delete window.csrf_token
           }
-          localStorage.removeItem('frappe_csrf_token')
+          sessionStorage.removeItem('frappe_csrf_token')
           
           // Show loading overlay before redirect (better UX)
           if (typeof window !== 'undefined') {
@@ -192,7 +238,41 @@ export const db = frappe.db()
 export const frappeCall = frappe.call()
 export const auth = frappe.auth()
 
+// Single-flight CSRF token fetch to avoid startup races (Desk already has token embedded).
+let csrfEnsureInFlight: Promise<void> | null = null
+async function ensureCSRFToken(): Promise<void> {
+  if (typeof window === 'undefined') return
+  const hasToken = !!(window as any).csrf_token || !!sessionStorage.getItem('frappe_csrf_token')
+  if (hasToken) return
+  if (csrfEnsureInFlight) return csrfEnsureInFlight
+
+  csrfEnsureInFlight = (async () => {
+    try {
+      const response = await fetch('/api/method/axon_erp.api.get_csrf_token', {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
+      })
+      if (!response.ok) return
+      const data = await response.json()
+      const newToken = data?.message?.csrf_token
+      if (newToken) {
+        ;(window as any).csrf_token = newToken
+        sessionStorage.setItem('frappe_csrf_token', newToken)
+      }
+    } finally {
+      csrfEnsureInFlight = null
+    }
+  })()
+
+  return csrfEnsureInFlight
+}
+
 // Helper function to call Frappe methods
 export const call = async (method: string, params?: any) => {
+  const isAuthMethod = method === 'login' || method === 'logout'
+  if (!isAuthMethod) {
+    await ensureCSRFToken()
+  }
   return frappeCall.post(method, params)
 }

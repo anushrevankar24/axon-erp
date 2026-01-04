@@ -11,6 +11,9 @@ import type { DependencyStateMap } from '@/lib/form/dependency_state'
 import { useFrappeRuntimeVersion } from '@/lib/frappe-runtime/react'
 import { isNullOrEmpty } from '@/lib/utils/validation'
 import { saveUserSettings } from '@/lib/user-settings/service'
+import { useBoot } from '@/lib/api/hooks'
+import { calculatePermissions, getFieldDisplayStatus, applyDependencyOverrides } from '@/lib/utils/field-permissions'
+import { getBootUserRoles } from '@/lib/utils/boot'
 
 interface Section {
   fieldname?: string
@@ -48,10 +51,13 @@ interface FormLayoutRendererProps {
   meta?: any
   dependencyState?: DependencyStateMap
   userSettings?: any
+  docinfo?: any  // Desk parity: docinfo.permissions for field visibility
 }
 
-export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, userSettings }: FormLayoutRendererProps) {
+export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, userSettings, docinfo }: FormLayoutRendererProps) {
   const runtimeVersion = useFrappeRuntimeVersion()
+  const { data: boot } = useBoot()
+  
   // Track collapsed sections for persistence
   const [collapsedSectionsState, setCollapsedSectionsState] = React.useState<Record<string, boolean>>({})
   // Track active tab
@@ -93,8 +99,32 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, u
     }))
   }, [tabs, doc, runtimeVersion])  // Re-run when doc/runtime changes (equivalent to refresh_dependency)
   
+  // Desk parity: filter tabs/sections/columns by field permissions
+  // This prevents empty tabs from showing (e.g., Roles tab for non-privileged users)
+  const tabsWithPermissions = React.useMemo(() => {
+    const userRoles = getBootUserRoles(boot)
+    if (!meta || userRoles.length === 0) return tabsWithVisibility
+    const permissions = calculatePermissions(meta as any, userRoles)
+    
+    return tabsWithVisibility.map(tab => ({
+      ...tab,
+      sections: tab.sections.map(section => ({
+        ...section,
+        columns: section.columns.map(column =>
+          column.filter(field => {
+            const effectiveField = applyDependencyOverrides(field as any, dependencyState?.[field.fieldname])
+            const status = getFieldDisplayStatus(effectiveField as any, doc, permissions, docinfo)
+            return status !== 'None'
+          })
+        ).filter(column => column.length > 0) // Remove empty columns
+      })).filter(section => 
+        !section.isHidden && section.columns.length > 0 // Remove sections with no visible fields
+      )
+    })).filter(tab => tab.sections.length > 0) // Remove tabs with no sections
+  }, [tabsWithVisibility, meta, boot, doc, dependencyState, docinfo, runtimeVersion])
+  
   // Safety check - ensure we have at least one tab
-  if (tabsWithVisibility.length === 0) {
+  if (tabsWithPermissions.length === 0) {
     return <div className="p-4 text-muted-foreground text-sm">No fields to display</div>
   }
   
@@ -128,10 +158,10 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, u
   }, [collapsedSectionsState, activeTab, meta?.name])
   
   // If only one tab (no Tab Breaks), render without tabs UI
-  if (tabsWithVisibility.length === 1) {
+  if (tabsWithPermissions.length === 1) {
     return (
       <div className="space-y-3">
-        {tabsWithVisibility[0].sections.map((section, sectionIndex) => 
+        {tabsWithPermissions[0].sections.map((section, sectionIndex) => 
           !section.isHidden && (
             <FormSection
               key={sectionIndex}
@@ -142,6 +172,7 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, u
               meta={meta}
               dependencyState={dependencyState}
               userSettings={userSettings}
+              docinfo={docinfo}
               onCollapsedChange={(collapsed) => {
                 if (section.fieldname) {
                   setCollapsedSectionsState(prev => ({
@@ -160,7 +191,7 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, u
   // Multiple tabs - render with tabs UI
   // Restore active tab from user_settings or default to first tab
   const savedActiveTab = userSettings?.Form?.active_tab
-  const defaultTab = savedActiveTab || tabsWithVisibility[0].fieldname || '0'
+  const defaultTab = savedActiveTab || tabsWithPermissions[0].fieldname || '0'
   
   return (
     <Tabs 
@@ -169,14 +200,14 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, u
       onValueChange={(value) => setActiveTab(value)}
     >
       <TabsList>
-        {tabsWithVisibility.map((tab, index) => (
+        {tabsWithPermissions.map((tab, index) => (
           <TabsTrigger key={tab.fieldname || index} value={tab.fieldname || String(index)}>
             {tab.label}
           </TabsTrigger>
         ))}
       </TabsList>
       
-      {tabsWithVisibility.map((tab, index) => (
+      {tabsWithPermissions.map((tab, index) => (
         <TabsContent key={tab.fieldname || index} value={tab.fieldname || String(index)}>
           <div className="space-y-3">
             {tab.sections.map((section, sectionIndex) => 
@@ -190,6 +221,7 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, u
                   meta={meta}
                   dependencyState={dependencyState}
                   userSettings={userSettings}
+                  docinfo={docinfo}
                   onCollapsedChange={(collapsed) => {
                     if (section.fieldname) {
                       setCollapsedSectionsState(prev => ({
@@ -267,8 +299,8 @@ function parseFieldsIntoTabs(fields: Field[]): FormTab[] {
       if (!currentSection.columns[currentColumnIndex]) {
         currentSection.columns[currentColumnIndex] = []
       }
-    } else if (!field.hidden && field.fieldtype !== 'HTML') {
-      // Add field to current column (skip hidden and HTML fields)
+    } else if (!field.hidden) {
+      // Add field to current column (include HTML fields for User doctype custom editors)
       if (!currentTab) {
         // Auto-create first tab if fields before first Tab Break
         currentTab = {
@@ -343,6 +375,7 @@ function FormSection({
   meta,
   dependencyState,
   userSettings,
+  docinfo,
   onCollapsedChange
 }: { 
   section: Section
@@ -352,6 +385,7 @@ function FormSection({
   meta?: any
   dependencyState?: DependencyStateMap
   userSettings?: any
+  docinfo?: any
   onCollapsedChange?: (collapsed: boolean) => void
 }) {
   const collapsedByDependency = (section as any).collapsed_due_to_dependency
@@ -440,6 +474,7 @@ function FormSection({
               meta={meta}
               dependencyState={dependencyState}
               userSettings={userSettings}
+              docinfo={docinfo}
             />
           ))}
         </div>

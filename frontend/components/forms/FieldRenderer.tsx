@@ -20,8 +20,14 @@ import { LinkField } from './LinkField'
 import { ChildTable } from './ChildTable'
 import { cn } from '@/lib/utils'
 import { useFieldPermissions } from '@/lib/hooks/useFieldPermissions'
+import { useBoot } from '@/lib/api/hooks'
 import { DocTypeMeta } from '@/lib/types/metadata'
 import type { DependencyStateMap } from '@/lib/form/dependency_state'
+import { UserRolesEditorField } from '@/components/user/UserRolesEditorField'
+import { UserModulesEditorField } from '@/components/user/UserModulesEditorField'
+import { RoleProfileRolesEditorField } from '@/components/role-profile/RoleProfileRolesEditorField'
+import { ModuleProfileModulesEditorField } from '@/components/module-profile/ModuleProfileModulesEditorField'
+import { getBootUserId, getBootUserRoles } from '@/lib/utils/boot'
 
 // ============================================================================
 // Types
@@ -47,6 +53,7 @@ interface FieldRendererProps {
   meta?: DocTypeMeta  // DocType metadata
   dependencyState?: DependencyStateMap
   userSettings?: any  // User settings for this DocType
+  docinfo?: any  // Desk parity: docinfo.permissions for doc-level permissions
 }
 
 // ============================================================================
@@ -99,19 +106,107 @@ function formatDatetimeForInput(value: string | null | undefined): string {
 // Main Component
 // ============================================================================
 
-export function FieldRenderer({ field, form, doc, meta, dependencyState, userSettings }: FieldRendererProps) {
+export function FieldRenderer({ field, form, doc, meta, dependencyState, userSettings, docinfo }: FieldRendererProps) {
   const fieldName = field.fieldname
-  const { getFieldStatus } = useFieldPermissions(meta, doc, dependencyState)
+  const { data: boot } = useBoot()
+  const { getFieldStatus } = useFieldPermissions(meta, doc, dependencyState, docinfo)
   const fieldStatus = getFieldStatus(fieldName)
   
   // Hide if no permission
   if (fieldStatus === 'None') {
     return null
   }
+
+  // Desk parity: User doctype renders roles/modules using custom editors injected into HTML fields.
+  // The underlying storage tables should not be rendered as normal grids.
+  if (
+    doc?.doctype === 'User' &&
+    field.fieldtype === 'Table' &&
+    (field.fieldname === 'roles' || field.fieldname === 'block_modules')
+  ) {
+    return null
+  }
+
+  // Desk parity: Role Profile uses roles_html container + hidden roles table for storage.
+  if (doc?.doctype === 'Role Profile' && field.fieldtype === 'Table' && field.fieldname === 'roles') {
+    return null
+  }
   
   // Skip breaks
-  if (['Section Break', 'Column Break', 'HTML', 'Tab Break'].includes(field.fieldtype)) {
+  if (['Section Break', 'Column Break', 'Tab Break'].includes(field.fieldtype)) {
     return null
+  }
+
+  // Special handling for HTML fields (Desk uses HTML fields as containers)
+  if (field.fieldtype === 'HTML') {
+    // Desk parity: Module Profile renders module editor into module_html and stores into hidden block_modules
+    if (doc?.doctype === 'Module Profile' && field.fieldname === 'module_html') {
+      const userRoles = getBootUserRoles(boot)
+      const canEdit = userRoles.includes('Administrator') || userRoles.includes('System Manager')
+      if (!canEdit) return null
+      const allModules = (doc?.__onload?.all_modules as string[]) || []
+      return (
+        <div className="mt-2">
+          <ModuleProfileModulesEditorField form={form} allModules={allModules} disabled={!canEdit} />
+        </div>
+      )
+    }
+
+    // Desk parity: Role Profile renders roles via frappe.RoleEditor injected into roles_html
+    if (doc?.doctype === 'Role Profile' && field.fieldname === 'roles_html') {
+      const userRoles = getBootUserRoles(boot)
+      const canEdit = userRoles.includes('Administrator') || userRoles.includes('System Manager')
+      return (
+        <div className="mt-2">
+          <RoleProfileRolesEditorField form={form} disabled={!canEdit} />
+        </div>
+      )
+    }
+
+    // User roles/modules: render Desk-parity editors in the HTML field containers
+    if (doc?.doctype === 'User' && (field.fieldname === 'roles_html' || field.fieldname === 'modules_html')) {
+      // Desk parity gate: only users with write permission at permlevel >= 1 for User can edit roles/modules.
+      const rolesForEditing =
+        (meta?.permissions || [])
+          .filter((p: any) => (p.permlevel || 0) >= 1 && !!p.write)
+          .map((p: any) => p.role) || []
+      const requiredRoles = rolesForEditing.length ? rolesForEditing : ['System Manager']
+      const userRoles = getBootUserRoles(boot)
+      const isAdministrator = userRoles.includes('Administrator') || getBootUserId(boot) === 'Administrator'
+      const canEditUserSecurity = isAdministrator || userRoles.some((r) => requiredRoles.includes(r))
+
+      // Desk parity: roles_html/modules_html fields are just containers (read_only doesn't matter)
+      // The editors only respect the security gate (canEditUserSecurity) and profile-lock (Strict Desk)
+      const securityDisabled = !canEditUserSecurity
+      
+      if (field.fieldname === 'roles_html') {
+        // Desk parity: lock/unlock should follow the live form value (clearing profile should immediately enable manual edits)
+        // The editor itself watches role_profile_name.
+        const rolesDisabled = securityDisabled
+        return (
+          <div className="mt-2">
+            <UserRolesEditorField form={form} baseDisabled={rolesDisabled} />
+          </div>
+        )
+      }
+
+      if (field.fieldname === 'modules_html') {
+        // Desk parity: lock/unlock should follow the live form value (clearing profile should immediately enable manual edits)
+        // The editor itself watches module_profile.
+        const modulesDisabled = securityDisabled
+        const allModules = (doc?.__onload?.all_modules as string[]) || []
+        return (
+          <div className="mt-2">
+            <UserModulesEditorField form={form} allModules={allModules} baseDisabled={modulesDisabled} />
+          </div>
+        )
+      }
+    }
+
+    // Generic HTML field: render its HTML content (Desk behavior)
+    const html = field.options || ''
+    if (!html) return null
+    return <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
   }
   
   // Determine if field should be read-only
@@ -418,7 +513,6 @@ function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError
     
     case 'Text Editor':
     case 'Code':
-    case 'HTML':
       return (
         <Textarea 
           rows={8} 
@@ -430,6 +524,12 @@ function renderFieldInput(field: FieldMeta, formField: any, form?: any, hasError
           )} 
         />
       )
+
+    case 'HTML': {
+      const html = field.options || formField.value || ''
+      if (!html) return null
+      return <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
+    }
     
     case 'Read Only':
       return (

@@ -10,16 +10,18 @@ import { useBoot } from '@/lib/api/hooks'
 import { DocTypeMeta } from '@/lib/types/metadata'
 import { calculatePermissions, getFieldDisplayStatus, evaluateDependsOn, applyDependencyOverrides } from '@/lib/utils/field-permissions'
 import type { DependencyStateMap } from '@/lib/form/dependency_state'
+import { getBootUserRoles } from '@/lib/utils/boot'
 
-export function useFieldPermissions(meta: DocTypeMeta | undefined, doc: any, dependencyState?: DependencyStateMap) {
+export function useFieldPermissions(meta: DocTypeMeta | undefined, doc: any, dependencyState?: DependencyStateMap, docinfo?: any) {
   const { data: boot } = useBoot()
   
   const permissions = useMemo(() => {
-    if (!meta || !boot?.user?.roles) {
+    const userRoles = getBootUserRoles(boot)
+    if (!meta || userRoles.length === 0) {
       return {}
     }
-    return calculatePermissions(meta, boot.user.roles)
-  }, [meta, boot?.user?.roles])
+    return calculatePermissions(meta, userRoles)
+  }, [meta, boot])
   
   const getFieldStatus = useMemo(() => {
     return (fieldname: string) => {
@@ -35,9 +37,10 @@ export function useFieldPermissions(meta: DocTypeMeta | undefined, doc: any, dep
         return 'None'
       }
       
-      return getFieldDisplayStatus(effectiveField as any, doc, permissions)
+      // Desk parity: incorporate docinfo.permissions (doc-level permissions)
+      return getFieldDisplayStatus(effectiveField as any, doc, permissions, docinfo)
     }
-  }, [meta, doc, permissions, dependencyState])
+  }, [meta, doc, permissions, dependencyState, docinfo])
   
   return {
     permissions,

@@ -14,7 +14,8 @@
 import * as React from 'react'
 import { useForm } from 'react-hook-form'
 import { useRouter } from 'next/navigation'
-import { useMetaWithSettings, useDoc } from '@/lib/api/hooks'
+import { useQueryClient } from '@tanstack/react-query'
+import { useMetaWithSettings, useDoc, useDocWithInfo } from '@/lib/api/hooks'
 import { saveDocument } from '@/lib/api/document'
 import { FormLayoutRenderer } from './FormLayoutRenderer'
 import { QuickEntryInline } from './QuickEntryInline'
@@ -85,8 +86,21 @@ export function DynamicForm({
   onSaveError 
 }: DynamicFormProps) {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { data: metaWithSettings, isLoading: metaLoading } = useMetaWithSettings(doctype)
-  const { data: doc, isLoading: docLoading } = useDoc(doctype, id)
+  
+  // Determine if this is a new document
+  const isNew = !id || id === 'new'
+  
+  // For existing docs, use useDocWithInfo to get docinfo.permissions (Desk parity)
+  // For new docs, use useDoc (no docinfo available yet)
+  const { data: docWithInfo, isLoading: docWithInfoLoading } = useDocWithInfo(doctype, id)
+  const { data: newDoc, isLoading: newDocLoading } = useDoc(doctype, id)
+  
+  const doc = isNew ? newDoc : docWithInfo?.doc
+  const docinfo = isNew ? null : docWithInfo?.docinfo
+  const docLoading = isNew ? newDocLoading : docWithInfoLoading
+  
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const { showError } = useMessageDialog()
   const runtimeVersion = useFrappeRuntimeVersion()
@@ -94,9 +108,6 @@ export function DynamicForm({
   // Extract meta and user_settings
   const meta = metaWithSettings?.meta
   const userSettings = metaWithSettings?.user_settings
-  
-  // Determine if this is a new document
-  const isNew = !id || id === 'new'
   
   // Quick Entry mode state
   const [showQuickEntry, setShowQuickEntry] = React.useState(false)
@@ -264,6 +275,11 @@ export function DynamicForm({
         // Reset form dirty state
         form.reset(result.doc)
         
+        // Strict Desk parity: invalidate doc query so useDoc() refetches with saved state
+        // This ensures doc.role_profile_name / doc.module_profile reflect saved values
+        // which drives the strict disable timing for role/module editors
+        queryClient.invalidateQueries({ queryKey: ['doc', doctype, result.doc.name] })
+        
         // Call success callback
         onSaveSuccess?.(result.doc)
         
@@ -409,6 +425,7 @@ export function DynamicForm({
               meta={effectiveMeta}
               dependencyState={dependencyState}
               userSettings={userSettings}
+              docinfo={docinfo}
               onEditFullForm={() => setShowQuickEntry(false)}
             />
           ) : (
@@ -419,6 +436,7 @@ export function DynamicForm({
               meta={effectiveMeta}
               dependencyState={dependencyState}
               userSettings={userSettings}
+              docinfo={docinfo}
             />
           )}
         </form>

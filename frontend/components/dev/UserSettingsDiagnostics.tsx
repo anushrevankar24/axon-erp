@@ -17,7 +17,10 @@ import { runAllParityTests } from "@/lib/user-settings/__tests__/roundtrip.test"
 
 export function UserSettingsDiagnostics() {
   const [isOpen, setIsOpen] = React.useState(false)
-  const [diagnostics, setDiagnostics] = React.useState({
+  const [diagnostics, setDiagnostics] = React.useState<{
+    pendingCount: number
+    pendingWrites: Array<{ doctype: string; updates: any }>
+  }>({
     pendingCount: 0,
     pendingWrites: []
   })

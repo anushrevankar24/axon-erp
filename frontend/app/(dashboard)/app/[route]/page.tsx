@@ -11,6 +11,8 @@ import { Card } from '@/components/ui/card'
 import Link from 'next/link'
 import { AlertCircle } from 'lucide-react'
 import type { Workspace } from '@/lib/types/workspace'
+import { useResolvedPage } from '@/lib/pages/resolvePage'
+import { getRegisteredPage } from '@/lib/pages/registry'
 
 interface DynamicRouteProps {
   params: Promise<{ route: string }>
@@ -29,36 +31,81 @@ export default function DynamicRoutePage({ params }: DynamicRouteProps) {
   const { route: routeSlug } = use(params)
   const decodedRoute = decodeComponent(routeSlug)  // Decode URL (ERPNext pattern)
   const { data: boot } = useBoot()
-  
-  if (!boot) {
-    return <WorkspaceSkeleton />
-  }
-  
+
+  // Hooks must be called in the same order on every render.
+  // Resolve Page with enabled=false until boot is available.
+  const pageName = slugify(decodedRoute)
+  const bootReady = !!boot
+
   // Step 1: Check if it's a workspace (ERPNext line 181)
   // Case-insensitive slug matching
-  const workspace = boot.allowed_workspaces?.find(
-    (ws: Workspace) => slugify(ws.name) === slugify(decodedRoute)
-  )
-  
-  if (workspace) {
-    return <WorkspaceView workspace={workspace} />
-  }
+  const workspace = bootReady
+    ? boot!.allowed_workspaces?.find((ws: Workspace) => slugify(ws.name) === slugify(decodedRoute))
+    : null
   
   // Step 2: Check if it's a DocType slug (ERPNext line 202)
   // Convert slug back to DocType name: "sales-order" → "Sales Order"
-  const doctype = unslugify(decodedRoute, boot)
+  const doctype = bootReady ? unslugify(decodedRoute, boot as any) : null
   
+  // Step 3: Check if it's a Desk Page (e.g. permission-manager, user-profile)
+  const shouldResolvePage = bootReady && !workspace && !doctype
+  const { data: pageResult, isLoading: pageLoading } = useResolvedPage(pageName, shouldResolvePage)
+  const Page = getRegisteredPage(pageName)
+
+  if (!boot) {
+    return <WorkspaceSkeleton />
+  }
+
+  if (workspace) {
+    return <WorkspaceView workspace={workspace} />
+  }
+
   if (doctype) {
     return <ListView doctype={doctype} />
   }
-  
-  // Step 3: Not found
+
+  if (pageLoading) {
+    return <WorkspaceSkeleton />
+  }
+
+  if (pageResult?.ok && pageResult.page) {
+    if (Page) {
+      return <Page />
+    }
+    return (
+      <Card className="p-12 text-center">
+        <AlertCircle className="w-8 h-8 mx-auto mb-4 text-yellow-600" />
+        <h3 className="text-lg font-semibold mb-2">Page Not Supported Yet</h3>
+        <p className="text-muted-foreground mb-4">
+          "{routeSlug}" is a Desk Page, but it hasn’t been implemented in this frontend yet.
+        </p>
+        <Link href="/app/home" className="text-primary hover:underline">
+          Go to Home
+        </Link>
+      </Card>
+    )
+  }
+
+  if (pageResult && !pageResult.ok) {
+    return (
+      <Card className="p-12 text-center">
+        <AlertCircle className="w-8 h-8 mx-auto mb-4 text-red-500" />
+        <h3 className="text-lg font-semibold mb-2">{pageResult.error.title}</h3>
+        <p className="text-muted-foreground mb-4">{pageResult.error.message}</p>
+        <Link href="/app/home" className="text-primary hover:underline">
+          Go to Home
+        </Link>
+      </Card>
+    )
+  }
+
+  // Step 4: Not found
   return (
     <Card className="p-12 text-center">
       <AlertCircle className="w-8 h-8 mx-auto mb-4 text-red-500" />
       <h3 className="text-lg font-semibold mb-2">Page Not Found</h3>
       <p className="text-muted-foreground mb-4">
-        "{routeSlug}" is not a valid workspace or DocType
+        "{routeSlug}" is not a valid workspace, DocType, or Page
       </p>
       <Link href="/app/home" className="text-primary hover:underline">
         Go to Home

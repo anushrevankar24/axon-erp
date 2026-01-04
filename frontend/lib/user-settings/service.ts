@@ -170,3 +170,4 @@ export const saveUserSettings = (doctype: string, updates: Partial<UserSettings>
   userSettingsService.save(doctype, updates, immediate)
 export const flushUserSettings = () => userSettingsService.flush()
 
+

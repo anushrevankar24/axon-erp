@@ -35,10 +35,10 @@ function LoginForm() {
       // Fetch CSRF token after login (Frappe SDK pattern)
       try {
         const response = await fetch('/api/method/axon_erp.api.get_csrf_token', {
-          method: 'POST',
+          method: 'GET',
           credentials: 'include',
           headers: {
-            'Content-Type': 'application/json'
+            'Accept': 'application/json'
           }
         })
         
@@ -50,8 +50,8 @@ function LoginForm() {
             // Store in window.csrf_token (Frappe SDK pattern - official way)
             window.csrf_token = csrfToken
             
-            // Backup to localStorage for persistence across page refreshes
-            localStorage.setItem('frappe_csrf_token', csrfToken)
+            // Backup to sessionStorage for per-tab persistence across page refreshes
+            sessionStorage.setItem('frappe_csrf_token', csrfToken)
           }
         }
       } catch (csrfError) {

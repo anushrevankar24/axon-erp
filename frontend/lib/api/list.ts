@@ -34,8 +34,31 @@ export async function getList(params: ListParams): Promise<any[]> {
     // The API returns an array of objects directly
     const data = response?.message || []
     return Array.isArray(data) ? data : []
-  } catch (error) {
-    console.error('[getList] Error fetching list:', error)
+  } catch (error: any) {
+    // Avoid noisy logs for expected cases:
+    // - 401/403 when session expired or user lacks permission (handled elsewhere)
+    // - explicit PermissionError from Frappe
+    // - our interceptor may throw Error('Session expired') after redirect
+    const status = error?.response?.status ?? error?.httpStatus
+    const excType = error?.response?.data?.exc_type ?? error?.exc_type
+    const message = error?.message
+
+    const isAuthOrPermission =
+      status === 401 ||
+      status === 403 ||
+      excType === 'PermissionError' ||
+      message === 'Session expired'
+
+    if (!isAuthOrPermission && process.env.NODE_ENV !== 'production') {
+      console.error('[getList] Error fetching list:', {
+        status,
+        excType,
+        message,
+        data: error?.response?.data,
+        url: error?.config?.url,
+      })
+    }
+
     return []
   }
 }

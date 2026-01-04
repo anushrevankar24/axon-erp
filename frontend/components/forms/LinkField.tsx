@@ -1,9 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { Check, ChevronsUpDown, Loader2, X } from "lucide-react"
+import { Check, ChevronsUpDown, ExternalLink, Loader2, X } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { slugify } from "@/lib/utils/workspace"
 import {
   Command,
   CommandEmpty,
@@ -26,7 +28,7 @@ interface LinkOption {
 }
 
 interface LinkFieldProps {
-  value?: string
+  value?: any
   onChange: (value: string) => void
   doctype: string
   placeholder?: string
@@ -104,6 +106,10 @@ export function LinkField({
   disabled = false,
   hasError = false
 }: LinkFieldProps) {
+  const router = useRouter()
+  // Enforce Desk contract: Link fields store and render string names.
+  // If callers accidentally pass objects (e.g., boot.user), render safely as empty.
+  const stringValue = typeof value === "string" ? value : ""
   const [open, setOpen] = React.useState(false)
   const [searchTerm, setSearchTerm] = React.useState("")
   const debouncedSearch = useDebounce(searchTerm, 300)
@@ -148,7 +154,7 @@ export function LinkField({
   }, [displayOptions, searchTerm, isSmallDocType])
 
   const handleSelect = (selectedValue: string) => {
-    onChange(selectedValue === value ? "" : selectedValue)
+    onChange(selectedValue === stringValue ? "" : selectedValue)
     setOpen(false)
     setSearchTerm("")
   }
@@ -157,6 +163,12 @@ export function LinkField({
     e.stopPropagation()
     onChange("")
     setSearchTerm("")
+  }
+
+  const handleOpenLink = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!stringValue) return
+    router.push(`/app/${slugify(doctype)}/${encodeURIComponent(stringValue)}`)
   }
 
   return (
@@ -169,19 +181,33 @@ export function LinkField({
           disabled={disabled}
           className={cn(
             "w-full justify-between font-normal h-8 text-sm",
-            !value && "text-muted-foreground",
+            !stringValue && "text-muted-foreground",
             hasError && "border-red-500 focus:ring-red-500"
           )}
         >
           <span className="truncate">
-            {value || placeholder || `Select ${doctype}`}
+            {stringValue || placeholder || `Select ${doctype}`}
           </span>
           <div className="flex items-center gap-2">
-            {value && !disabled && (
-              <X
-                className="h-4 w-4 shrink-0 opacity-50 hover:opacity-100"
+            {stringValue && !disabled && (
+              <span
+                className="inline-flex items-center justify-center opacity-50 hover:opacity-100 cursor-pointer"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={handleOpenLink}
+                aria-label="Open Link"
+              >
+                <ExternalLink className="h-4 w-4 shrink-0" />
+              </span>
+            )}
+            {stringValue && !disabled && (
+              <span
+                className="inline-flex items-center justify-center opacity-50 hover:opacity-100 cursor-pointer"
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={handleClear}
-              />
+                aria-label="Clear"
+              >
+                <X className="h-4 w-4 shrink-0" />
+              </span>
             )}
             <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
           </div>

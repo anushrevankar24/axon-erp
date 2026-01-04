@@ -31,11 +31,18 @@ export function calculatePermissions(
 ): PermissionMap {
   const perms: PermissionMap = {}
   
-  // Administrator has all permissions
+  // Administrator has all permissions across all permlevels (Desk parity)
   if (userRoles.includes('Administrator')) {
-    return {
-      0: { permlevel: 0, read: true, write: true }
+    // Grant permissions for permlevels 0-10 (covers all standard use cases)
+    for (let level = 0; level <= 10; level++) {
+      perms[level] = { 
+        permlevel: level, 
+        read: true, 
+        write: true,
+        rights_without_if_owner: new Set(['read', 'write'])
+      }
     }
+    return perms
   }
   
   // Filter permissions by user's roles
@@ -92,6 +99,20 @@ export function getFieldDisplayStatus(
       status = 'Write'
     } else if (p.read) {
       status = 'Read'
+    }
+  }
+  
+  // Desk parity: clamp status based on doc-level permissions (docinfo.permissions)
+  // This handles DocShare, owner permissions, user permissions, etc.
+  if (docInfo?.permissions) {
+    const docPerms = docInfo.permissions
+    // If doc permission says no write, downgrade Write to Read
+    if (status === 'Write' && !docPerms.write) {
+      status = 'Read'
+    }
+    // If doc permission says no read, set to None
+    if ((status === 'Write' || status === 'Read') && !docPerms.read) {
+      status = 'None'
     }
   }
   
