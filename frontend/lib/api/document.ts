@@ -430,3 +430,248 @@ export async function setValue(
   }
 }
 
+// ============================================================================
+// Desk Parity APIs - Client Lifecycle Verbs
+// ============================================================================
+
+/**
+ * Insert a document using frappe.client.insert
+ * 
+ * Used by Desk for quick entry and dialog-based creates
+ * Based on: frappe/client.py::insert() and frappe/public/js/frappe/db.js::insert()
+ * 
+ * @param doc - Document to insert (must have doctype)
+ */
+export async function clientInsert(doc: Record<string, any>): Promise<DocumentSaveResult> {
+  try {
+    const result = await call('frappe.client.insert', {
+      doc: JSON.stringify(doc)
+    })
+    
+    return {
+      success: true,
+      doc: result.message,
+      message: 'Inserted'
+    }
+  } catch (error: any) {
+    return {
+      success: false,
+      error: parseFrappeError(error)
+    }
+  }
+}
+
+/**
+ * Save a document using frappe.client.save
+ * 
+ * Used by Desk for quick entry saves (not full form saves - those use savedocs)
+ * Based on: frappe/client.py::save() and frappe/public/js/frappe/form/quick_entry.js::insert()
+ * 
+ * @param doc - Document to save (must have doctype and name)
+ */
+export async function clientSave(doc: Record<string, any>): Promise<DocumentSaveResult> {
+  try {
+    const result = await call('frappe.client.save', {
+      doc: JSON.stringify(doc)
+    })
+    
+    return {
+      success: true,
+      doc: result.message,
+      message: 'Saved'
+    }
+  } catch (error: any) {
+    return {
+      success: false,
+      error: parseFrappeError(error)
+    }
+  }
+}
+
+/**
+ * Submit a document using frappe.client.submit
+ * 
+ * Used by Desk for quick entry submits
+ * Based on: frappe/client.py::submit() and frappe/public/js/frappe/form/quick_entry.js::submit()
+ * 
+ * @param doc - Document to submit (must have doctype and name)
+ */
+export async function clientSubmit(doc: Record<string, any>): Promise<DocumentSaveResult> {
+  try {
+    const result = await call('frappe.client.submit', {
+      doc: JSON.stringify(doc)
+    })
+    
+    return {
+      success: true,
+      doc: result.message,
+      message: 'Submitted'
+    }
+  } catch (error: any) {
+    return {
+      success: false,
+      error: parseFrappeError(error)
+    }
+  }
+}
+
+/**
+ * Cancel a document using frappe.client.cancel
+ * 
+ * Generic client cancel (use cancelDocument/savedocs for full form flow)
+ * Based on: frappe/client.py::cancel()
+ * 
+ * @param doctype - DocType name
+ * @param name - Document name
+ */
+export async function clientCancel(doctype: string, name: string): Promise<DocumentSaveResult> {
+  try {
+    const result = await call('frappe.client.cancel', {
+      doctype,
+      name
+    })
+    
+    return {
+      success: true,
+      doc: result.message,
+      message: 'Cancelled'
+    }
+  } catch (error: any) {
+    return {
+      success: false,
+      error: parseFrappeError(error)
+    }
+  }
+}
+
+/**
+ * Validate a link field and optionally fetch dependent fields
+ * 
+ * Used by Desk link fields to validate existence and populate fetch fields
+ * Based on: frappe/client.py::validate_link() and 
+ * frappe/public/js/frappe/form/controls/link.js::validate_link_and_fetch()
+ * 
+ * @param doctype - The linked DocType
+ * @param docname - The document name to validate
+ * @param fields - Optional array of fields to fetch from the linked doc
+ * @returns The validated doc with fetched fields
+ */
+export async function validateLink(
+  doctype: string,
+  docname: string,
+  fields?: string[]
+): Promise<{ success: boolean; doc?: any; error?: FrappeError }> {
+  try {
+    const result = await call('frappe.client.validate_link', {
+      doctype,
+      docname,
+      fields: fields ? JSON.stringify(fields) : undefined
+    })
+    
+    return {
+      success: true,
+      doc: result.message
+    }
+  } catch (error: any) {
+    return {
+      success: false,
+      error: parseFrappeError(error)
+    }
+  }
+}
+
+/**
+ * Check if a document has been amended
+ * 
+ * Used by Desk to gate the Amend action (prevent double-amend)
+ * Based on: frappe/client.py::is_document_amended() and 
+ * frappe/public/js/frappe/form/toolbar.js and form.js amend_doc() checks
+ * 
+ * @param doctype - DocType name
+ * @param docname - Document name
+ * @returns true if the document has already been amended
+ */
+export async function isDocumentAmended(
+  doctype: string,
+  docname: string
+): Promise<boolean> {
+  try {
+    const result = await call('frappe.client.is_document_amended', {
+      doctype,
+      docname
+    })
+    
+    return !!result.message
+  } catch (error) {
+    console.error('[isDocumentAmended] Error checking amend status:', error)
+    return false
+  }
+}
+
+/**
+ * Get a single value from a Single DocType
+ * 
+ * Used for reading settings/configuration values
+ * Based on: frappe/client.py::get_single_value() and frappe/public/js/frappe/db.js::get_single_value()
+ * 
+ * @param doctype - Single DocType name
+ * @param field - Field name to get
+ */
+export async function getSingleValue(doctype: string, field: string): Promise<any> {
+  try {
+    const result = await call('frappe.client.get_single_value', {
+      doctype,
+      field
+    })
+    
+    return result.message
+  } catch (error) {
+    console.error('[getSingleValue] Error fetching single value:', error)
+    return null
+  }
+}
+
+/**
+ * Rename a document (including merge option)
+ * 
+ * Uses Desk's rename flow (not frappe.client.rename_doc, which Desk doesn't use)
+ * Based on: frappe/model/rename_doc.py::update_document_title() and 
+ * frappe/public/js/frappe/form/toolbar.js::rename_document_title()
+ * 
+ * @param doctype - DocType name
+ * @param docname - Current document name
+ * @param newName - New name (can be same as old if only updating title)
+ * @param newTitle - New title (for title_field updates)
+ * @param merge - Whether to merge with existing doc if newName exists
+ * @param enqueue - Run in background (for large renames with many links)
+ */
+export async function updateDocumentTitle(params: {
+  doctype: string
+  docname: string
+  name?: string
+  title?: string
+  merge?: boolean
+  enqueue?: boolean
+}): Promise<{ success: boolean; new_name?: string; error?: FrappeError }> {
+  try {
+    const result = await call('frappe.model.rename_doc.update_document_title', {
+      doctype: params.doctype,
+      docname: params.docname,
+      name: params.name,
+      title: params.title,
+      merge: params.merge ? 1 : 0,
+      enqueue: params.enqueue ? 1 : 0
+    })
+    
+    return {
+      success: true,
+      new_name: result.message
+    }
+  } catch (error: any) {
+    return {
+      success: false,
+      error: parseFrappeError(error)
+    }
+  }
+}
+

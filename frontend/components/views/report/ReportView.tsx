@@ -17,6 +17,16 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Settings, Download, RefreshCw } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { exportQueryReport } from "@/lib/api/reports"
+import { useState } from "react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface ReportViewProps {
   reportName: string
@@ -24,6 +34,7 @@ interface ReportViewProps {
 
 export function ReportView({ reportName }: ReportViewProps) {
   const { data: userSettings } = useUserSettings(reportName)
+  const [showExportDialog, setShowExportDialog] = useState(false)
   
   // Report state
   const [filters, setFilters] = React.useState<Record<string, any>>(
@@ -75,6 +86,16 @@ export function ReportView({ reportName }: ReportViewProps) {
   const columns = reportData?.columns || []
   const data = reportData?.result || []
   
+  const handleExport = (fileFormat: 'CSV' | 'Excel') => {
+    exportQueryReport({
+      report_name: reportName,
+      filters,
+      file_format_type: fileFormat,
+      export_in_background: data.length > 500,
+    })
+    setShowExportDialog(false)
+  }
+  
   return (
     <div className="p-6 h-full">
       {/* Report Header */}
@@ -85,7 +106,7 @@ export function ReportView({ reportName }: ReportViewProps) {
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={() => setShowExportDialog(true)}>
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
@@ -155,6 +176,49 @@ export function ReportView({ reportName }: ReportViewProps) {
           </Table>
         </div>
       </Card>
+      
+      {/* Export Dialog (Desk pattern) */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Export {reportName}</DialogTitle>
+            <DialogDescription>
+              Choose export format
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => handleExport('CSV')}
+                className="flex-1"
+              >
+                Export as CSV
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => handleExport('Excel')}
+                className="flex-1"
+              >
+                Export as Excel
+              </Button>
+            </div>
+            
+            {data.length > 500 && (
+              <p className="text-sm text-muted-foreground">
+                Large exports will be processed in the background and emailed to you
+              </p>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowExportDialog(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

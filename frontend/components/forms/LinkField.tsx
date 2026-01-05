@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/popover"
 import { useQuery } from "@tanstack/react-query"
 import { call } from "@/lib/api/client"
+import { validateLink } from "@/lib/api/document"
 
 interface LinkOption {
   value: string
@@ -153,8 +154,30 @@ export function LinkField({
     )
   }, [displayOptions, searchTerm, isSmallDocType])
 
-  const handleSelect = (selectedValue: string) => {
-    onChange(selectedValue === stringValue ? "" : selectedValue)
+  const handleSelect = async (selectedValue: string) => {
+    if (selectedValue === stringValue) {
+      onChange("")
+      setOpen(false)
+      setSearchTerm("")
+      return
+    }
+    
+    // Desk pattern: validate link on selection
+    // Based on: frappe/public/js/frappe/form/controls/link.js::validate_link_and_fetch()
+    try {
+      const result = await validateLink(doctype, selectedValue)
+      if (result.success && result.doc) {
+        // Use the validated/canonical name from server
+        onChange(result.doc.name || selectedValue)
+      } else {
+        // Validation failed, but still set the value (Desk allows invalid links temporarily)
+        onChange(selectedValue)
+      }
+    } catch (error) {
+      // Network error or validation failed, still set the value
+      onChange(selectedValue)
+    }
+    
     setOpen(false)
     setSearchTerm("")
   }

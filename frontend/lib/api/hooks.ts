@@ -12,7 +12,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { call } from './client'
 import { useMemo } from 'react'
-import { getList, getListCount, getListFields } from './list'
+import { getList, getListCount, getListFields, reportviewGet, normalizeCompressedResponse } from './list'
+import { dictFiltersToTuples } from '@/lib/utils/filters'
 import { 
   getDocument, 
   getDocType, 
@@ -491,11 +492,16 @@ export function useProcessSetup() {
 }
 
 // ============================================================================
-// List Hooks - Using Desk API
+// List Hooks - Using Desk API (reportview.get - Desk canonical method)
 // ============================================================================
 
 /**
- * Enhanced list data hook using reportview API
+ * Enhanced list data hook using Desk's canonical reportview.get method
+ * 
+ * This is the same method Desk uses (base_list.js sets this.method = "frappe.desk.reportview.get")
+ * Returns normalized row objects from the compressed {keys, values} payload
+ * 
+ * Based on: frappe/public/js/frappe/list/base_list.js
  */
 export function useListData(params: {
   doctype: string
@@ -518,19 +524,28 @@ export function useListData(params: {
   return useQuery({
     queryKey: ['list-data', params],
     queryFn: async () => {
-      const data = await getList({
+      // Convert dict filters to Desk-style filter tuples
+      const filterTuples = params.filters ? dictFiltersToTuples(params.filters) : undefined
+      
+      // Call Desk's canonical reportview.get (compressed payload)
+      const compressedData = await reportviewGet({
         doctype: params.doctype,
         fields,
-        filters: params.filters,
+        filters: filterTuples,
         order_by: params.sortBy 
           ? `${params.sortBy} ${params.sortOrder || 'asc'}` 
           : 'modified desc',
-        limit_start: ((params.page || 1) - 1) * (params.pageSize || 20),
-        limit_page_length: params.pageSize || 20,
+        start: ((params.page || 1) - 1) * (params.pageSize || 20),
+        page_length: params.pageSize || 20,
+        view: 'List',
         with_comment_count: true,
+        save_user_settings: true,
       })
       
-      return data
+      // Normalize compressed response into row objects
+      const normalizedRows = normalizeCompressedResponse(compressedData)
+      
+      return normalizedRows
     },
     enabled: !!params.doctype && !!meta,  // Wait for meta to load
     placeholderData: (previousData) => previousData,  // Smooth pagination (replaces keepPreviousData)

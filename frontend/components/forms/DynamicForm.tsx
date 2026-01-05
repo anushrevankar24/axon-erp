@@ -17,6 +17,13 @@ import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { useMetaWithSettings, useDoc, useDocWithInfo } from '@/lib/api/hooks'
 import { saveDocument } from '@/lib/api/document'
+import { 
+  shouldUseQuickEntry, 
+  getQuickEntryFields, 
+  quickEntrySave, 
+  quickEntrySubmit, 
+  canQuickEntrySubmit 
+} from '@/lib/api/quick-entry'
 import { FormLayoutRenderer } from './FormLayoutRenderer'
 import { QuickEntryInline } from './QuickEntryInline'
 import { scrollToField } from './FieldRenderer'

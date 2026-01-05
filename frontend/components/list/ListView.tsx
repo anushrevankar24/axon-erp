@@ -15,6 +15,8 @@ import { formatDistanceToNow } from "date-fns"
 import { Badge } from "@/components/ui/badge"
 import { useUserSettings } from "@/lib/user-settings/react"
 import { saveListFilters, saveListSort, saveLastView } from "@/lib/user-settings/helpers"
+import type { FilterTuple } from "@/lib/api/list"
+import { dictFiltersToTuples, tuplesToDictFilters } from "@/lib/utils/filters"
 
 interface ListViewProps {
   doctype: string
@@ -33,7 +35,8 @@ export function ListView({ doctype }: ListViewProps) {
   // Track if settings have been applied (Desk parity: apply once on init)
   const didInitRef = React.useRef(false)
   
-  // State management - will be initialized from user_settings once
+  // State management - using dict filters for UI convenience (converted to tuples for API)
+  // This matches Desk pattern: UI works with simple objects, API gets tuples
   const [filters, setFilters] = React.useState<Record<string, any>>({})
   const [searchText, setSearchText] = React.useState("")
   const [sortBy, setSortBy] = React.useState("modified")
@@ -44,6 +47,22 @@ export function ListView({ doctype }: ListViewProps) {
 
   // Fetch metadata
   const { data: meta, isLoading: metaLoading} = useMeta(doctype)
+  
+  // Compute fields for list (used by export and data fetch)
+  const fields = React.useMemo(() => {
+    if (!meta) return ['name']
+    const listFields = ['name']
+    if (meta.title_field && meta.title_field !== 'name') {
+      listFields.push(meta.title_field)
+    }
+    meta.fields?.forEach((f: any) => {
+      if (f.in_list_view && !listFields.includes(f.fieldname)) {
+        listFields.push(f.fieldname)
+      }
+    })
+    listFields.push('modified', 'owner', 'creation')
+    return listFields.slice(0, 10) // Limit to 10 fields
+  }, [meta])
   
   // Apply user_settings once when they load (DESK PARITY)
   React.useEffect(() => {
@@ -232,6 +251,11 @@ export function ListView({ doctype }: ListViewProps) {
           onRefresh={refetch}
           onBulkDelete={selectedRows.length > 0 && canDelete(doctype) ? handleBulkDelete : undefined}
           canCreate={canCreate(doctype)}
+          filters={filters}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          fields={fields}
+          selectedRows={selectedRows}
         />
 
         {/* Data Table - horizontal scroll only when needed */}

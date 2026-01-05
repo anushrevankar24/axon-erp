@@ -14,12 +14,6 @@ import { useBoot } from '@/lib/api/hooks'
 import { calculatePermissions, getFieldDisplayStatus, applyDependencyOverrides } from '@/lib/utils/field-permissions'
 import { getBootUserRoles } from '@/lib/utils/boot'
 
-function isUserSettingsDebugEnabled(): boolean {
-  if (process.env.NODE_ENV !== 'development') return false
-  if (typeof window === 'undefined') return false
-  return localStorage.getItem('debug_user_settings') === '1'
-}
-
 interface Section {
   fieldname?: string
   label?: string
