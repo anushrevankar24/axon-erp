@@ -16,7 +16,14 @@ import {
   getUserEnergyAndReviewPoints,
 } from "@/lib/api/user-profile"
 import styles from "@/components/user-profile/user-profile.module.css"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
 import { UserProfileSidebar } from "@/components/user-profile/UserProfileSidebar"
 import { OverviewHeatmapCard, TypeDistributionCard, EnergyPointsLineCard } from "@/components/user-profile/UserProfileCharts"
 import { RecentActivityTimeline } from "@/components/user-profile/RecentActivityTimeline"
@@ -150,6 +157,9 @@ export function UserProfilePage({ user }: { user?: string }) {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Change User</DialogTitle>
+            <DialogDescription className="sr-only">
+              Select a user to view their profile.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <div className="text-xs text-muted-foreground">User</div>

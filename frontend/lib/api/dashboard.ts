@@ -85,14 +85,19 @@ export async function addComment(doctype: string, docname: string, comment: stri
   }
 }
 
-// Get assignments
+// Get assignments - Desk pattern: read from docinfo.assignments
+// Based on: frappe/public/js/frappe/form/sidebar/assign_to.js::refresh()
+// frappe.desk.form.assign_to.get is NOT whitelisted (internal helper only)
+// Desk gets assignments from docinfo which comes via get_docinfo or getdoc
 export async function getAssignments(doctype: string, docname: string) {
   try {
-    const response = await call('frappe.desk.form.assign_to.get', {
-      dt: doctype,
-      dn: docname
+    const response = await call('frappe.desk.form.load.get_docinfo', {
+      doctype,
+      name: docname,
     })
-    return response?.message || []
+    const docinfo = response?.message || {}
+    // Desk uses docinfo.assignments: [{ owner, name }, ...]
+    return docinfo.assignments || []
   } catch (error) {
     // Silently fail for new documents or unsupported DocTypes
     return []

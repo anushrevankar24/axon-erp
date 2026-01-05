@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import {
   Table,
@@ -163,6 +164,9 @@ export function RoleEditor({ value, onChange, disabled = false }: RoleEditorProp
         <DialogContent className="max-w-[1200px]">
           <DialogHeader>
             <DialogTitle>{selectedRole || "Role Permissions"}</DialogTitle>
+            <DialogDescription className="sr-only">
+              View effective permissions for the selected role.
+            </DialogDescription>
           </DialogHeader>
 
           {permLoading ? (
