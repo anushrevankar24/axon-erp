@@ -67,6 +67,7 @@ export interface DocTypeMeta {
   __calendar_js?: string
   __tree_js?: string
   __dashboard?: any
+  __linked_with?: any
 }
 
 export interface DocInfo {

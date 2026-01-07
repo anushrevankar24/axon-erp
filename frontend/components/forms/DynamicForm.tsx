@@ -13,10 +13,10 @@
 
 import * as React from 'react'
 import { useForm } from 'react-hook-form'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { useMetaWithSettings, useDoc, useDocWithInfo } from '@/lib/api/hooks'
-import { saveDocument } from '@/lib/api/document'
+import { saveDocument, type SaveAction } from '@/lib/api/document'
 import { 
   shouldUseQuickEntry, 
   getQuickEntryFields, 
@@ -36,6 +36,7 @@ import { useMessageDialog } from '@/components/ui/message-dialog'
 import { computeDependencyStateForMetaFields } from '@/lib/form/dependency_state'
 import { useFrappeRuntimeVersion } from '@/lib/frappe-runtime/react'
 import { applyDependencyOverrides } from '@/lib/utils/field-permissions'
+import { showDeskAlert } from '@/lib/utils/desk-alert'
 
 // ============================================================================
 // Types
@@ -51,6 +52,17 @@ interface DynamicFormProps {
 }
 
 interface FormHandle {
+  /**
+   * Desk parity: toolbar delegates to form submit, passing action verb.
+   * - 'Save' for normal save
+   * - 'Submit' for submit
+   * - 'Update' for update after submit (rare; Desk uses Update in some flows)
+   */
+  submit: (action?: SaveAction) => Promise<void>
+  /**
+   * Back-compat convenience: Save
+   * (Some callers may still expect handleSubmit semantics)
+   */
   handleSubmit: () => Promise<void>
   isDirty: boolean
   isSubmitting: boolean
@@ -93,6 +105,7 @@ export function DynamicForm({
   onSaveError 
 }: DynamicFormProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const { data: metaWithSettings, isLoading: metaLoading } = useMetaWithSettings(doctype)
   
@@ -107,6 +120,29 @@ export function DynamicForm({
   const doc = isNew ? newDoc : docWithInfo?.doc
   const docinfo = isNew ? null : docWithInfo?.docinfo
   const docLoading = isNew ? newDocLoading : docWithInfoLoading
+
+  // Desk parity: Duplicate opens /new and carries a query param with a stored draft copy.
+  // We hydrate that copy here to prefill the new document (no server call required beyond getNewDoc).
+  const [duplicateDraft, setDuplicateDraft] = React.useState<any>(null)
+  React.useEffect(() => {
+    if (!isNew) return
+    const sourceName = searchParams?.get('duplicate_from')
+    if (!sourceName) return
+
+    try {
+      const key = `duplicate:${doctype}:${sourceName}`
+      const raw = sessionStorage.getItem(key)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      // Clear after read to avoid stale reuse
+      sessionStorage.removeItem(key)
+      setDuplicateDraft(parsed)
+    } catch (e) {
+      console.warn('[Duplicate] Failed to hydrate duplicate draft:', e)
+    }
+  }, [isNew, doctype, searchParams])
+
+  const effectiveDoc = isNew && duplicateDraft ? duplicateDraft : doc
   
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const { showError } = useMessageDialog()
@@ -121,9 +157,9 @@ export function DynamicForm({
 
   // Dependency state (Desk refresh_dependency equivalent)
   const dependencyState = React.useMemo(() => {
-    if (!meta || !doc) return {}
-    return computeDependencyStateForMetaFields(meta.fields || [], { doc, parent: doc })
-  }, [meta, doc, runtimeVersion])
+    if (!meta || !effectiveDoc) return {}
+    return computeDependencyStateForMetaFields(meta.fields || [], { doc: effectiveDoc, parent: effectiveDoc })
+  }, [meta, effectiveDoc, runtimeVersion])
 
   const effectiveMeta = React.useMemo(() => {
     if (!meta) return meta
@@ -199,7 +235,7 @@ export function DynamicForm({
   
   // Initialize form with proper default values to avoid uncontrolled input warnings
   const form = useForm({
-    values: doc || {},
+    values: effectiveDoc || {},
     defaultValues: {},
   })
 
@@ -217,7 +253,7 @@ export function DynamicForm({
   // Form Submission Handler - ERPNext Pattern
   // ============================================================================
   
-  const onSubmit = React.useCallback(async (data: any) => {
+  const onSubmitWithAction = React.useCallback(async (data: any, action: SaveAction = 'Save') => {
     if (isSubmitting) return
     
     setIsSubmitting(true)
@@ -271,13 +307,18 @@ export function DynamicForm({
       // Step 3: Save via Desk API
       // ========================================
       // Uses frappe.desk.form.save.savedocs - same as ERPNext frontend
-      const result = await saveDocument(docToSave, 'Save')
+      const result = await saveDocument(docToSave, action)
       
       if (result.success && result.doc) {
         // Success!
-        toast.success(`${doctype} ${isNew ? 'created' : 'updated'} successfully`, {
-          duration: 3000,
-        })
+        const actionVerb =
+          action === 'Submit'
+            ? 'submitted'
+            : isNew
+              ? 'created'
+              : 'updated'
+
+        showDeskAlert(`${doctype} ${actionVerb} successfully`, { indicator: 'green', duration: 3000 })
         
         // Reset form dirty state
         form.reset(result.doc)
@@ -383,6 +424,14 @@ export function DynamicForm({
     }
   }, [doctype, id, isNew, effectiveMeta, form, router, onSaveSuccess, onSaveError, isSubmitting])
 
+  // Desk parity: expose a submit method that accepts the action verb.
+  const submit = React.useCallback(
+    async (action: SaveAction = 'Save') => {
+      return await form.handleSubmit((data: any) => onSubmitWithAction(data, action))()
+    },
+    [form, onSubmitWithAction]
+  )
+
   // ============================================================================
   // Expose form methods to parent
   // ============================================================================
@@ -390,12 +439,13 @@ export function DynamicForm({
   React.useEffect(() => {
     if (onFormReady) {
       onFormReady({
-        handleSubmit: () => form.handleSubmit(onSubmit)(),
+        submit,
+        handleSubmit: () => submit('Save'),
         isDirty: form.formState.isDirty,
         isSubmitting,
       })
     }
-  }, [onFormReady, form, onSubmit, isSubmitting])
+  }, [onFormReady, form, submit, isSubmitting])
   
   // ============================================================================
   // Render
@@ -419,7 +469,7 @@ export function DynamicForm({
     <div className="animate-in fade-in-50 duration-300">
       <Form {...form}>
         <form 
-          onSubmit={form.handleSubmit(onSubmit)} 
+          onSubmit={form.handleSubmit((data: any) => onSubmitWithAction(data, 'Save'))} 
           className="space-y-3"
           noValidate // We handle validation ourselves
         >

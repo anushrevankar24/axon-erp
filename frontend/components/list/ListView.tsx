@@ -80,6 +80,23 @@ export function ListView({ doctype }: ListViewProps) {
       // Note: filters would be applied here when we implement Desk filter tuples
     }
   }, [userSettings, doctype])
+
+  // Desk parity: route options (used by Links and other navigations).
+  // Apply once on mount, then clear.
+  React.useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('route_options')
+      if (!raw) return
+      const opts = JSON.parse(raw)
+      if (opts && typeof opts === 'object') {
+        setFilters((prev) => ({ ...prev, ...opts }))
+      }
+      sessionStorage.removeItem('route_options')
+    } catch (e) {
+      console.warn('[ListView] Failed to apply route_options:', e)
+      sessionStorage.removeItem('route_options')
+    }
+  }, [])
   
   // Save last_view (DESK PARITY: top-level key)
   React.useEffect(() => {

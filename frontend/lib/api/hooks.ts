@@ -566,6 +566,62 @@ export function useListCount(doctype: string, filters?: Record<string, any>) {
 }
 
 // ============================================================================
+// Workflow Hooks
+// ============================================================================
+
+/**
+ * Get workflow transitions for a document
+ * Returns available actions based on current state and user roles
+ */
+export function useWorkflowTransitions(doctype: string, doc?: any) {
+  return useQuery({
+    queryKey: ['workflow-transitions', doctype, doc?.name, doc?.workflow_state],
+    queryFn: async () => {
+      if (!doc || doc.__islocal) {
+        return []
+      }
+      
+      const { getWorkflowTransitions } = await import('./workflow')
+      const result = await getWorkflowTransitions(doc)
+      
+      if (!result.success) {
+        // Workflow might not be configured for this doctype
+        return []
+      }
+      
+      return result.transitions || []
+    },
+    enabled: !!(doctype && doc && !doc.__islocal),
+    staleTime: 0, // Don't cache - transitions depend on state
+    retry: 1,
+  })
+}
+
+/**
+ * Mutation hook for applying workflow action
+ */
+export function useApplyWorkflow(doctype: string) {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async ({ doc, action }: { doc: any; action: string }) => {
+      const { applyWorkflow } = await import('./workflow')
+      return await applyWorkflow(doc, action)
+    },
+    onSuccess: (result, { doc }) => {
+      if (result.success && result.doc) {
+        // Invalidate related queries
+        queryClient.invalidateQueries({ queryKey: ['doc', doctype, doc.name] })
+        queryClient.invalidateQueries({ queryKey: ['doc-with-info', doctype, doc.name] })
+        queryClient.invalidateQueries({ queryKey: ['docinfo', doctype, doc.name] })
+        queryClient.invalidateQueries({ queryKey: ['workflow-transitions', doctype] })
+        queryClient.invalidateQueries({ queryKey: ['list', doctype] })
+      }
+    }
+  })
+}
+
+// ============================================================================
 // Re-export workspace hooks
 // ============================================================================
 

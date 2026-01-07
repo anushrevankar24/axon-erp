@@ -675,3 +675,52 @@ export async function updateDocumentTitle(params: {
   }
 }
 
+/**
+ * Copy/duplicate a document
+ * 
+ * Uses Frappe v2 API endpoint for getting a clean copy
+ * Returns a copy of the document that can be modified and saved as new
+ * 
+ * Based on: frappe/api/v2.py::copy_doc() and frappe/__init__.py::copy_doc()
+ * 
+ * @param doctype - DocType name
+ * @param name - Document name to copy
+ * @param ignore_no_copy - Whether to ignore no_copy flag on fields
+ */
+export async function copyDocument(
+  doctype: string,
+  name: string,
+  ignore_no_copy: boolean = true
+): Promise<{ success: boolean; doc?: any; error?: FrappeError }> {
+  try {
+    // Use Frappe v2 API endpoint for copy
+    const response = await fetch(
+      `/api/v2/document/${encodeURIComponent(doctype)}/${encodeURIComponent(name)}/copy?ignore_no_copy=${ignore_no_copy ? 'true' : 'false'}`,
+      {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+        }
+      }
+    )
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.message || `Failed to copy document: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    
+    return {
+      success: true,
+      doc: data
+    }
+  } catch (error: any) {
+    return {
+      success: false,
+      error: parseFrappeError(error)
+    }
+  }
+}
+
