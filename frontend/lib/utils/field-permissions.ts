@@ -29,7 +29,16 @@ export function calculatePermissions(
   meta: DocTypeMeta,
   userRoles: string[]
 ): PermissionMap {
-  const perms: PermissionMap = {}
+  // Desk parity: always have a permlevel 0 object, even if no role matches.
+  // (Frappe JS: starts with [{ read: 0, permlevel: 0 }])
+  const perms: PermissionMap = {
+    0: {
+      permlevel: 0,
+      read: false,
+      write: false,
+      rights_without_if_owner: new Set(),
+    },
+  }
   
   // Administrator has all permissions across all permlevels (Desk parity)
   if (userRoles.includes('Administrator')) {
@@ -73,8 +82,21 @@ export function calculatePermissions(
       if (p.write) perms[level].rights_without_if_owner?.add('write')
     }
   })
-  
+
   return perms
+}
+
+function getSharedRightsForUser(docInfo: any, currentUser?: string) {
+  if (!currentUser) return null
+  const shared = Array.isArray(docInfo?.shared) ? docInfo.shared : []
+  const row = shared.find((s: any) => s?.user === currentUser)
+  if (!row) return null
+  return {
+    read: !!row.read,
+    write: !!row.write,
+    submit: !!row.submit,
+    share: !!row.share,
+  }
 }
 
 /**
@@ -85,35 +107,44 @@ export function getFieldDisplayStatus(
   field: DocField,
   doc: any,
   perms: PermissionMap,
-  docInfo?: any
+  docInfo?: any,
+  currentUser?: string
 ): FieldDisplayStatus {
   // Get permissions for field's permlevel
   const permlevel = field.permlevel || 0
   const p = perms[permlevel]
-  
-  let status: FieldDisplayStatus = 'None'
-  
-  // Check permission at permlevel
-  if (p) {
-    if (p.write && !field.read_only) {
-      status = 'Write'
-    } else if (p.read) {
-      status = 'Read'
+
+  // Desk parity:
+  // - Base role perms come from DocType meta (per permlevel).
+  // - For permlevel 0, doc-level permissions (docinfo.permissions) override base role perms.
+  // - DocShare grants (docinfo.shared) are applied on top (can upgrade read/write).
+  let canRead = !!p?.read
+  let canWrite = !!p?.write && !field.read_only
+
+  if (permlevel === 0 && docInfo?.permissions) {
+    const docPerms = docInfo.permissions
+    if (typeof docPerms.read === 'number' || typeof docPerms.read === 'boolean') {
+      canRead = !!docPerms.read
+    }
+    if (typeof docPerms.write === 'number' || typeof docPerms.write === 'boolean') {
+      canWrite = !!docPerms.write && !field.read_only
     }
   }
-  
-  // Desk parity: clamp status based on doc-level permissions (docinfo.permissions)
-  // This handles DocShare, owner permissions, user permissions, etc.
-  if (docInfo?.permissions) {
-    const docPerms = docInfo.permissions
-    // If doc permission says no write, downgrade Write to Read
-    if (status === 'Write' && !docPerms.write) {
-      status = 'Read'
+
+  if (permlevel === 0) {
+    const sharedRights = getSharedRightsForUser(docInfo, currentUser)
+    if (sharedRights) {
+      // Match Desk: only upgrade if not already granted.
+      if (!canRead && sharedRights.read) canRead = true
+      if (!canWrite && sharedRights.write && !field.read_only) canWrite = true
     }
-    // If doc permission says no read, set to None
-    if ((status === 'Write' || status === 'Read') && !docPerms.read) {
-      status = 'None'
-    }
+  }
+
+  let status: FieldDisplayStatus = 'None'
+  if (canWrite && !(field as any).disabled && !(field as any).is_virtual) {
+    status = 'Write'
+  } else if (canRead) {
+    status = 'Read'
   }
   
   // Apply field-level overrides

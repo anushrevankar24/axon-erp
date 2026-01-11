@@ -10,10 +10,11 @@ import { useBoot } from '@/lib/api/hooks'
 import { DocTypeMeta } from '@/lib/types/metadata'
 import { calculatePermissions, getFieldDisplayStatus, evaluateDependsOn, applyDependencyOverrides } from '@/lib/utils/field-permissions'
 import type { DependencyStateMap } from '@/lib/form/dependency_state'
-import { getBootUserRoles } from '@/lib/utils/boot'
+import { getBootUserId, getBootUserRoles } from '@/lib/utils/boot'
 
 export function useFieldPermissions(meta: DocTypeMeta | undefined, doc: any, dependencyState?: DependencyStateMap, docinfo?: any) {
   const { data: boot } = useBoot()
+  const currentUser = useMemo(() => getBootUserId(boot), [boot])
   
   const permissions = useMemo(() => {
     const userRoles = getBootUserRoles(boot)
@@ -38,9 +39,9 @@ export function useFieldPermissions(meta: DocTypeMeta | undefined, doc: any, dep
       }
       
       // Desk parity: incorporate docinfo.permissions (doc-level permissions)
-      return getFieldDisplayStatus(effectiveField as any, doc, permissions, docinfo)
+      return getFieldDisplayStatus(effectiveField as any, doc, permissions, docinfo, currentUser)
     }
-  }, [meta, doc, permissions, dependencyState, docinfo])
+  }, [meta, doc, permissions, dependencyState, docinfo, currentUser])
   
   return {
     permissions,

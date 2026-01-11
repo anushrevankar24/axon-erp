@@ -12,7 +12,7 @@ import { useFrappeRuntimeVersion } from '@/lib/frappe-runtime/react'
 import { isNullOrEmpty } from '@/lib/utils/validation'
 import { useBoot } from '@/lib/api/hooks'
 import { calculatePermissions, getFieldDisplayStatus, applyDependencyOverrides } from '@/lib/utils/field-permissions'
-import { getBootUserRoles } from '@/lib/utils/boot'
+import { getBootUserId, getBootUserRoles } from '@/lib/utils/boot'
 
 interface Section {
   fieldname?: string
@@ -102,6 +102,7 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, u
   // This prevents empty tabs from showing (e.g., Roles tab for non-privileged users)
   const tabsWithPermissions = React.useMemo(() => {
     const userRoles = getBootUserRoles(boot)
+    const currentUser = getBootUserId(boot)
     if (!meta || userRoles.length === 0) return tabsWithVisibility
     const permissions = calculatePermissions(meta as any, userRoles)
     
@@ -112,7 +113,7 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, u
         columns: section.columns.map(column =>
           column.filter(field => {
             const effectiveField = applyDependencyOverrides(field as any, dependencyState?.[field.fieldname])
-            const status = getFieldDisplayStatus(effectiveField as any, doc, permissions, docinfo)
+            const status = getFieldDisplayStatus(effectiveField as any, doc, permissions, docinfo, currentUser)
             return status !== 'None'
           })
         ).filter(column => column.length > 0) // Remove empty columns

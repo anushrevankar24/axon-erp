@@ -13,9 +13,11 @@ import { JumpToFieldDialog } from "./JumpToFieldDialog"
 import { LinksDialog, type LinkedWithItem } from "./LinksDialog"
 import { EmailComposerDialog, type EmailComposerValue } from "./EmailComposerDialog"
 import { useDoc, useDocWithInfo, useMeta, useWorkflowTransitions } from "@/lib/api/hooks"
+import { useBoot } from "@/lib/api/hooks"
 import { buildActionManifest } from "@/lib/actions"
 import type { ActionContext } from "@/lib/actions/types"
 import { slugify } from "@/lib/utils/workspace"
+import { getBootUserId } from "@/lib/utils/boot"
 
 interface DocumentLayoutProps {
   doctype: string
@@ -25,6 +27,7 @@ interface DocumentLayoutProps {
 export function DocumentLayout({ doctype, id }: DocumentLayoutProps) {
   const router = useRouter()
   const isNew = !id || id === 'new'
+  const { data: boot } = useBoot()
   const [isDirty, setIsDirty] = React.useState(false)
   const [formRef, setFormRef] = React.useState<any>(null)
   const [renameOpen, setRenameOpen] = React.useState(false)
@@ -104,6 +107,7 @@ export function DocumentLayout({ doctype, id }: DocumentLayoutProps) {
     if (!doc || !meta) return null
     
     return {
+      currentUser: boot ? getBootUserId(boot) : undefined,
       doctype,
       docname: doc.name || null,
       doc,
@@ -120,7 +124,7 @@ export function DocumentLayout({ doctype, id }: DocumentLayoutProps) {
         openEmail,
       }
     }
-  }, [doc, meta, docinfo, workflowTransitions, doctype, refetch, navigate, formRef, openRename, openJumpToField, openLinks, openEmail])
+  }, [doc, meta, docinfo, workflowTransitions, doctype, refetch, navigate, formRef, openRename, openJumpToField, openLinks, openEmail, boot])
   
   // Build action manifest - prevent concurrent builds and handle cleanup
   const [actionManifest, setActionManifest] = React.useState<any>(null)

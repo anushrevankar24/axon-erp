@@ -10,8 +10,15 @@ export type PageResolveResult =
 
 export async function fetchPageDoc(pageName: string): Promise<PageResolveResult> {
   try {
-    const res = await call("frappe.client.get", { doctype: "Page", name: pageName })
-    return { ok: true, page: res?.message || res }
+    // Desk parity: Desk does NOT read DocType "Page" directly (often restricted).
+    // It calls the whitelisted method frappe.desk.desk_page.getpage which applies Page.is_permitted().
+    const res = await call("frappe.desk.desk_page.getpage", { name: pageName })
+    const page =
+      res?.docs?.[0] ??
+      res?.message?.docs?.[0] ??
+      res?.message?.[0] ??
+      null
+    return { ok: true, page }
   } catch (err: any) {
     const parsed = parseFrappeError(err)
     // Treat missing Page as "not found" rather than a hard error

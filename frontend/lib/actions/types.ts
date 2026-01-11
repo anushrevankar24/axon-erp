@@ -48,6 +48,8 @@ export interface ActionConfirmation {
  * Context passed to action handlers
  */
 export interface ActionContext {
+  /** Current logged-in user id (email/name). Required for Desk-parity DocShare permission merge. */
+  currentUser?: string
   /** DocType name */
   doctype: string
   /** Document name (may be null for new docs) */
@@ -182,6 +184,28 @@ export function checkActionRequirements(
 ): boolean {
   if (!requirements || requirements.length === 0) return true
 
+  const getEffectiveDocPermissions = (): any | null => {
+    const base = ctx.docinfo?.permissions
+    if (!base) return null
+
+    // Desk parity: apply DocShare grants from docinfo.shared for current user
+    // Source: frappe/public/js/frappe/model/perm.js (shared merge)
+    const user = ctx.currentUser
+    const shared = Array.isArray((ctx.docinfo as any)?.shared) ? (ctx.docinfo as any).shared : []
+    const row = user ? shared.find((s: any) => s?.user === user) : null
+    if (!row) return base
+
+    const merged: any = { ...base }
+    for (const right of ['read', 'write', 'submit', 'share']) {
+      if (!merged[right] && row?.[right]) {
+        merged[right] = row[right]
+      }
+    }
+    return merged
+  }
+
+  const effectiveDocPermissions = getEffectiveDocPermissions()
+
   return requirements.every(req => {
     // Permission check
     if (req.permission && ctx.docinfo) {
@@ -194,7 +218,7 @@ export function checkActionRequirements(
       }
       
       // Type-safe permission access
-      const permissions = ctx.docinfo.permissions
+      const permissions = effectiveDocPermissions || ctx.docinfo.permissions
       if (permissions && req.permission in permissions) {
         const hasPermission = permissions[req.permission as keyof typeof permissions]
         if (!hasPermission) return false
