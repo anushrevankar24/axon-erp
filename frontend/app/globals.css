@@ -91,7 +91,8 @@
   --scrollbar-thumb: rgba(156, 163, 175, 0.5);
   --scrollbar-thumb-hover: rgba(156, 163, 175, 0.7);
   --scrollbar-track: transparent;
-  --header-height: 48px;
+  /* UnifiedHeader uses Tailwind `h-14` (56px). Keep this in sync for sticky toolbars. */
+  --header-height: 56px;
 }
 
 .dark {

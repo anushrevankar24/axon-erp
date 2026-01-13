@@ -21,7 +21,7 @@ export function useFieldPermissions(meta: DocTypeMeta | undefined, doc: any, dep
     if (!meta || userRoles.length === 0) {
       return {}
     }
-    return calculatePermissions(meta, userRoles)
+    return calculatePermissions(meta, userRoles, currentUser)
   }, [meta, boot])
   
   const getFieldStatus = useMemo(() => {

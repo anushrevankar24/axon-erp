@@ -27,7 +27,8 @@ interface PermissionMap {
  */
 export function calculatePermissions(
   meta: DocTypeMeta,
-  userRoles: string[]
+  userRoles: string[],
+  currentUserId?: string
 ): PermissionMap {
   // Desk parity: always have a permlevel 0 object, even if no role matches.
   // (Frappe JS: starts with [{ read: 0, permlevel: 0 }])
@@ -40,8 +41,11 @@ export function calculatePermissions(
     },
   }
   
-  // Administrator has all permissions across all permlevels (Desk parity)
-  if (userRoles.includes('Administrator')) {
+  // Desk parity: Administrator user OR Administrator role has all permissions.
+  // Sources:
+  // - Server: frappe/permissions.py -> if user == "Administrator": return True
+  // - Client: frappe/public/js/frappe/model/perm.js -> user === "Administrator" || frappe.user_roles.includes("Administrator")
+  if (currentUserId === 'Administrator' || userRoles.includes('Administrator')) {
     // Grant permissions for permlevels 0-10 (covers all standard use cases)
     for (let level = 0; level <= 10; level++) {
       perms[level] = { 

@@ -41,7 +41,7 @@ export default function FormPage({ params }: FormPageProps) {
 
   if (!boot) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-full w-full">
         <div className="w-full max-w-7xl px-4">
           <FormSkeleton />
         </div>

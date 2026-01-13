@@ -238,7 +238,7 @@ export function ListView({ doctype }: ListViewProps) {
   }
 
   return (
-    <div className="flex-1 flex min-h-0">
+    <div className="flex-1 flex min-h-0 overflow-hidden">
       {/* Left: Common Filters Sidebar */}
       <FilterSidebar
         doctype={doctype}
@@ -247,56 +247,58 @@ export function ListView({ doctype }: ListViewProps) {
       />
 
       {/* Right: Main Content */}
-      <div className="flex-1 flex flex-col min-h-0">
-        {/* Standard Filters Bar (DocType-specific) */}
-        <StandardFiltersBar
-          doctype={doctype}
-          filters={filters}
-          onFiltersChange={handleFiltersChange}
-        />
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="flex flex-col min-h-0">
+          {/* Standard Filters Bar (DocType-specific) */}
+          <StandardFiltersBar
+            doctype={doctype}
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+          />
 
-        {/* Toolbar (Search + Actions) */}
-        <ListToolbar
-          doctype={doctype}
-          module={workspace}
-          searchText={searchText}
-          onSearchChange={handleSearchChange}
-          selectedCount={selectedRows.length}
-          totalCount={totalCount || 0}
-          currentPage={currentPage}
-          pageSize={pageSize}
-          onRefresh={refetch}
-          onBulkDelete={selectedRows.length > 0 && canDelete(doctype) ? handleBulkDelete : undefined}
-          canCreate={canCreate(doctype)}
-          filters={filters}
-          sortBy={sortBy}
-          sortOrder={sortOrder}
-          fields={fields}
-          selectedRows={selectedRows}
-        />
-
-        {/* Data Table - horizontal scroll only when needed */}
-        <div className="flex-1 p-3 bg-gray-50 overflow-x-auto">
-          <EnhancedDataTable
-            data={listData || []}
-            columns={columns}
+          {/* Toolbar (Search + Actions) */}
+          <ListToolbar
             doctype={doctype}
             module={workspace}
-            isLoading={listLoading}
-            onSelectionChange={setSelectedRows}
-          />
-        </div>
-
-        {/* Pagination */}
-        {listData && listData.length > 0 && (
-          <ListPagination
+            searchText={searchText}
+            onSearchChange={handleSearchChange}
+            selectedCount={selectedRows.length}
+            totalCount={totalCount || 0}
             currentPage={currentPage}
             pageSize={pageSize}
-            totalCount={totalCount || 0}
-            onPageChange={handlePageChange}
-            onPageSizeChange={handlePageSizeChange}
+            onRefresh={refetch}
+            onBulkDelete={selectedRows.length > 0 && canDelete(doctype) ? handleBulkDelete : undefined}
+            canCreate={canCreate(doctype)}
+            filters={filters}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            fields={fields}
+            selectedRows={selectedRows}
           />
-        )}
+
+          {/* Data Table - horizontal scroll only when needed */}
+          <div className="p-3 bg-gray-50 overflow-x-auto">
+            <EnhancedDataTable
+              data={listData || []}
+              columns={columns}
+              doctype={doctype}
+              module={workspace}
+              isLoading={listLoading}
+              onSelectionChange={setSelectedRows}
+            />
+          </div>
+
+          {/* Pagination */}
+          {listData && listData.length > 0 && (
+            <ListPagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalCount={totalCount || 0}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+            />
+          )}
+        </div>
       </div>
     </div>
   )

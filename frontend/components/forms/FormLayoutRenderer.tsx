@@ -61,9 +61,46 @@ const activeTabMap = new Map<string, string>()
 export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, userSettings, docinfo }: FormLayoutRendererProps) {
   const runtimeVersion = useFrappeRuntimeVersion()
   const { data: boot } = useBoot()
+  const currentUser = getBootUserId(boot)
+  const debugForm = React.useMemo(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      return new URLSearchParams(window.location.search).get('debug_form') === '1'
+    } catch {
+      return false
+    }
+  }, [])
   
   // Parse fields into tabs (3-level hierarchy: Tab → Section → Column)
   const tabs = React.useMemo(() => parseFieldsIntoTabs(fields), [fields])
+
+  // Debug: print meta + parsing summary (gated)
+  React.useEffect(() => {
+    if (!debugForm) return
+    // eslint-disable-next-line no-console
+    console.groupCollapsed(`[debug_form] FormLayoutRenderer ${meta?.name || doc?.doctype || ''} / ${doc?.name || ''}`)
+    try {
+      // eslint-disable-next-line no-console
+      console.log('boot.user:', boot?.user)
+      // eslint-disable-next-line no-console
+      console.log('currentUser:', currentUser)
+      // eslint-disable-next-line no-console
+      console.log('userRoles:', getBootUserRoles(boot))
+      // eslint-disable-next-line no-console
+      console.log('meta.fields count:', (meta?.fields || []).length)
+      // eslint-disable-next-line no-console
+      console.log('input fields count:', (fields || []).length)
+      // eslint-disable-next-line no-console
+      console.log('tab breaks in input:', (fields || []).filter((f: any) => f?.fieldtype === 'Tab Break').map((f: any) => ({ fieldname: f.fieldname, label: f.label, hidden: f.hidden, permlevel: f.permlevel })))
+      // eslint-disable-next-line no-console
+      console.log('parsed tabs:', tabs.map(t => ({ label: t.label, fieldname: t.fieldname, sections: t.sections.length })))
+      // eslint-disable-next-line no-console
+      console.log('docinfo.permissions:', docinfo?.permissions)
+    } finally {
+      // eslint-disable-next-line no-console
+      console.groupEnd()
+    }
+  }, [debugForm, boot, currentUser, doc?.doctype, doc?.name, docinfo?.permissions, fields, meta?.fields, meta?.name, tabs])
   
   // Evaluate section visibility based on depends_on
   // Replicates ERPNext's refresh_dependency() - layout.js lines 693-745
@@ -102,9 +139,8 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, u
   // This prevents empty tabs from showing (e.g., Roles tab for non-privileged users)
   const tabsWithPermissions = React.useMemo(() => {
     const userRoles = getBootUserRoles(boot)
-    const currentUser = getBootUserId(boot)
     if (!meta || userRoles.length === 0) return tabsWithVisibility
-    const permissions = calculatePermissions(meta as any, userRoles)
+    const permissions = calculatePermissions(meta as any, userRoles, currentUser)
     
     return tabsWithVisibility.map(tab => ({
       ...tab,
@@ -121,7 +157,22 @@ export function FormLayoutRenderer({ fields, form, doc, meta, dependencyState, u
         !section.isHidden && section.columns.length > 0 // Remove sections with no visible fields
       )
     })).filter(tab => tab.sections.length > 0) // Remove tabs with no sections
-  }, [tabsWithVisibility, meta, boot, doc, dependencyState, docinfo, runtimeVersion])
+  }, [tabsWithVisibility, meta, boot, doc, dependencyState, docinfo, runtimeVersion, currentUser])
+
+  React.useEffect(() => {
+    if (!debugForm) return
+    // eslint-disable-next-line no-console
+    console.groupCollapsed(`[debug_form] tabsWithPermissions ${meta?.name || doc?.doctype || ''} / ${doc?.name || ''}`)
+    try {
+      // eslint-disable-next-line no-console
+      console.log('tabsWithVisibility:', tabsWithVisibility.map(t => ({ label: t.label, sections: t.sections.length })))
+      // eslint-disable-next-line no-console
+      console.log('tabsWithPermissions:', tabsWithPermissions.map(t => ({ label: t.label, sections: t.sections.length, sectionSizes: t.sections.map(s => s.columns.map(c => c.length)) })))
+    } finally {
+      // eslint-disable-next-line no-console
+      console.groupEnd()
+    }
+  }, [debugForm, doc?.doctype, doc?.name, meta?.name, tabsWithPermissions, tabsWithVisibility])
   
   // Safety check - ensure we have at least one tab
   if (tabsWithPermissions.length === 0) {

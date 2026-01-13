@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { useWorkspaces } from '@/lib/api/workspace'
 import { getWorkspaceIcon } from '@/lib/utils/icons'
+import { slugify } from '@/lib/utils/workspace'
 
 /**
  * Sidebar Content Component
@@ -35,8 +36,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   // Separate public and private workspaces (ERPNext pattern)
-  const publicWorkspaces = workspaceData.pages.filter((ws: any) => ws.public)
-  const privateWorkspaces = workspaceData.pages.filter((ws: any) => !ws.public)
+  const pages = workspaceData.pages || []
+  const homeWorkspace = pages.find((ws: any) => slugify(ws?.name || ws?.title || '') === 'home')
+  const publicWorkspaces = pages.filter((ws: any) => ws.public && ws !== homeWorkspace)
+  const privateWorkspaces = pages.filter((ws: any) => !ws.public && ws !== homeWorkspace)
 
   const renderWorkspaceButton = (workspace: any) => {
     const Icon = getWorkspaceIcon(workspace.icon)
@@ -70,19 +73,6 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <p className="text-xs text-muted-foreground">Enterprise Resource Planning</p>
       </div>
       
-      {/* Home Link */}
-      <div className="p-2 border-b">
-        <Link href="/app/home" onClick={onNavigate}>
-          <Button 
-            variant={pathname === '/app/home' ? 'secondary' : 'ghost'} 
-            className="w-full justify-start"
-          >
-            <Home className="w-4 h-4 mr-2" />
-            Home
-          </Button>
-        </Link>
-      </div>
-      
       {/* Workspace Navigation - ERPNext style: native scroll with transparent track */}
       <div className="flex-1 overflow-y-auto scrollbar-sidebar">
         <div className="p-2">
@@ -92,12 +82,30 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </div>
           )}
           
-          {workspaceData.pages.length === 0 ? (
+          {pages.length === 0 ? (
             <div className="p-4 text-muted-foreground text-sm text-center">
               No workspaces available
             </div>
           ) : (
             <>
+              {/* Home (special-cased like ERPNext) */}
+              {homeWorkspace && (
+                <div className="mb-3">
+                  <Link
+                    href={homeWorkspace.public ? `/app/${homeWorkspace.name}` : `/app/private/${homeWorkspace.name}`}
+                    onClick={onNavigate}
+                  >
+                    <Button
+                      variant={pathname?.startsWith(homeWorkspace.public ? `/app/${homeWorkspace.name}` : `/app/private/${homeWorkspace.name}`) ? 'secondary' : 'ghost'}
+                      className="w-full justify-start"
+                    >
+                      <Home className="w-4 h-4 mr-2" />
+                      Home
+                    </Button>
+                  </Link>
+                </div>
+              )}
+
               {/* Public Workspaces */}
               {publicWorkspaces.length > 0 && (
                 <div className="mb-4">

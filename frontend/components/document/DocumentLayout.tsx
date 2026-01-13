@@ -167,7 +167,7 @@ export function DocumentLayout({ doctype, id }: DocumentLayoutProps) {
   }, [actionContext])
 
   return (
-    <div className="flex-1 w-full bg-gray-50 flex flex-col">
+    <div className="flex-1 w-full bg-gray-50 flex flex-col min-h-0 overflow-hidden">
       {/* Desk parity: Rename dialog (invoked from toolbar actions) */}
       <RenameDialog
         open={renameOpen}
@@ -234,65 +234,70 @@ export function DocumentLayout({ doctype, id }: DocumentLayoutProps) {
         }}
       />
 
-      {/* Document Title Bar - Dynamic Actions */}
-      <div className="border-b bg-white px-4 py-3 flex items-center justify-between sticky top-[var(--header-height)] z-10">
-        {/* Left: Document Name */}
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </Button>
-          
-          <h1 className="text-lg font-semibold">
-            {isNew ? `New ${doctype}` : (doc?.name || id || doctype)}
-          </h1>
-          
-          {isDirty && (
-            <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">
-              Not Saved
-            </span>
-          )}
-        </div>
-
-        {/* Right: Dynamic Actions */}
-        {actionManifest && actionContext && (
-          <DocumentHeaderActions
-            actions={actionManifest.actions}
-            context={actionContext}
-            isDirty={isDirty}
-          />
-        )}
-      </div>
-
-      {/* Dashboard (Connections) - Only show after save */}
-      {!isNew && id && (
-        <FormDashboard doctype={doctype} docname={id} />
-      )}
-
-      {/* Main Content Area - No nested scroll, body handles scrolling */}
-      <div className="flex-1 flex min-h-0">
-        {/* Form Content - flows naturally */}
-        <div className="flex-1 w-full">
-          <div className="px-4 py-3 max-w-7xl mx-auto">
-            <DynamicForm 
-              doctype={doctype} 
-              id={id}
-              onFormReady={setFormRef}
-              onDirtyChange={setIsDirty}
-            />
+      {/* Scroll container (dashboard shell disables body scroll) */}
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+        {/* Document Title Bar - Dynamic Actions */}
+        {/* In the dashboard shell, the scroll container starts *below* the global header.
+            So sticky headers inside the scroll area must use top: 0 (Desk parity for nested scrollers). */}
+        <div className="border-b bg-white px-4 py-3 flex items-center justify-between sticky top-0 z-10">
+          {/* Left: Document Name */}
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </Button>
+            
+            <h1 className="text-lg font-semibold">
+              {isNew ? `New ${doctype}` : (doc?.name || id || doctype)}
+            </h1>
+            
+            {isDirty && (
+              <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">
+                Not Saved
+              </span>
+            )}
           </div>
 
-          {/* Timeline (Activity & Comments) - Only show after save */}
-          {!isNew && id && (
-            <FormTimeline doctype={doctype} docname={id} />
+          {/* Right: Dynamic Actions */}
+          {actionManifest && actionContext && (
+            <DocumentHeaderActions
+              actions={actionManifest.actions}
+              context={actionContext}
+              isDirty={isDirty}
+            />
           )}
         </div>
 
-        {/* Sidebar - Only show after save */}
+        {/* Dashboard (Connections) - Only show after save */}
         {!isNew && id && (
-          <FormSidebar doctype={doctype} docname={id} doc={doc} />
+          <FormDashboard doctype={doctype} docname={id} />
         )}
+
+        {/* Main Content Area */}
+        <div className="flex-1 flex min-h-0">
+          {/* Form Content */}
+          <div className="flex-1 w-full">
+            <div className="px-4 py-3 max-w-7xl mx-auto">
+              <DynamicForm 
+                doctype={doctype} 
+                id={id}
+                onFormReady={setFormRef}
+                onDirtyChange={setIsDirty}
+              />
+            </div>
+
+            {/* Timeline (Activity & Comments) - Only show after save */}
+            {!isNew && id && (
+              <FormTimeline doctype={doctype} docname={id} />
+            )}
+          </div>
+
+          {/* Sidebar - Only show after save */}
+          {!isNew && id && (
+            <FormSidebar doctype={doctype} docname={id} doc={doc} />
+          )}
+        </div>
       </div>
     </div>
   )

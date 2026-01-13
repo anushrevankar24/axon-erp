@@ -5,5 +5,6 @@ export { LinkCard } from './LinkCard'
 export { LinkCardGrid } from './LinkCardGrid'
 export { NumberCardItem } from './NumberCardItem'
 export { NumberCardGrid } from './NumberCardGrid'
+export { WorkspaceContentRenderer } from './WorkspaceContentRenderer'
 export { WorkspaceSkeleton } from './WorkspaceSkeleton'
 

@@ -147,6 +147,14 @@ export function DynamicForm({
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const { showError } = useMessageDialog()
   const runtimeVersion = useFrappeRuntimeVersion()
+  const debugForm = React.useMemo(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      return new URLSearchParams(window.location.search).get('debug_form') === '1'
+    } catch {
+      return false
+    }
+  }, [])
   
   // Extract meta and user_settings
   const meta = metaWithSettings?.meta
@@ -455,6 +463,26 @@ export function DynamicForm({
   // Desk always evaluates dependencies against an actual doc object.
   if (metaLoading || docLoading) {
     return <FormSkeleton />
+  }
+
+  if (debugForm) {
+    // eslint-disable-next-line no-console
+    console.groupCollapsed(`[debug_form] DynamicForm ${doctype} / ${id || ''}`)
+    try {
+      // eslint-disable-next-line no-console
+      console.log('isNew:', isNew)
+      // eslint-disable-next-line no-console
+      console.log('doc.name:', doc?.name)
+      // eslint-disable-next-line no-console
+      console.log('meta.fields count:', (meta?.fields || []).length)
+      // eslint-disable-next-line no-console
+      console.log('tab breaks in meta:', (meta?.fields || []).filter((f: any) => f?.fieldtype === 'Tab Break').map((f: any) => ({ fieldname: f.fieldname, label: f.label, depends_on: f.depends_on, hidden: f.hidden, permlevel: f.permlevel })))
+      // eslint-disable-next-line no-console
+      console.log('docinfo.permissions:', docinfo?.permissions)
+    } finally {
+      // eslint-disable-next-line no-console
+      console.groupEnd()
+    }
   }
   
   if (!meta) {

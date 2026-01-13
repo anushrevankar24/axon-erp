@@ -7,10 +7,12 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen flex flex-col">
+    // Important: prevent <body> scrolling so sidebar doesn't scroll with page.
+    // Pages (workspace, list, form) manage their own scroll regions.
+    <div className="h-screen flex flex-col overflow-hidden">
       <UnifiedHeader />
-      {/* Main content - body handles scrolling, no nested overflow */}
-      <main className="flex-1 flex">
+      {/* Main content - fixed viewport region, children own scroll */}
+      <main className="flex-1 flex min-h-0 overflow-hidden">
         <WorkspaceErrorBoundary>
           {children}
         </WorkspaceErrorBoundary>

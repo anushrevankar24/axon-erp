@@ -4,7 +4,7 @@ import { use } from 'react'
 import { useBoot } from '@/lib/api/hooks'
 import { slugify, unslugify, decodeComponent } from '@/lib/utils/workspace'
 import { useWorkspaceDetails } from '@/lib/api/workspace'
-import { ShortcutGrid, LinkCardGrid, NumberCardGrid, WorkspaceSkeleton } from '@/components/workspace'
+import { ShortcutGrid, LinkCardGrid, NumberCardGrid, WorkspaceContentRenderer, WorkspaceSkeleton } from '@/components/workspace'
 import { ListView } from '@/components/list/ListView'
 import { WorkspaceSidebar } from '@/components/layout/WorkspaceSidebar'
 import { Card } from '@/components/ui/card'
@@ -121,6 +121,18 @@ export default function DynamicRoutePage({ params }: DynamicRouteProps) {
 function WorkspaceView({ workspace }: { workspace: Workspace }) {
   const { data: details, isLoading, error } = useWorkspaceDetails(workspace)
 
+  // Desk-parity fallback behavior:
+  // - If Workspace.content is missing/invalid, render the legacy flat widgets so the page never goes blank.
+  const hasValidWorkspaceContent = (() => {
+    try {
+      if (!workspace?.content) return false
+      const parsed = JSON.parse(workspace.content)
+      return Array.isArray(parsed) && parsed.length > 0
+    } catch {
+      return false
+    }
+  })()
+
   if (isLoading) {
     return (
       <div className="flex-1 flex overflow-hidden">
@@ -170,18 +182,24 @@ function WorkspaceView({ workspace }: { workspace: Workspace }) {
             <p className="text-muted-foreground mt-1">{workspace.module} Module</p>
           </div>
 
-          {details?.number_cards && details.number_cards.items.length > 0 && (
+          {/* Desk-parity rendering: Workspace.content defines layout/order. */}
+          {details && hasValidWorkspaceContent && (
+            <WorkspaceContentRenderer workspace={workspace} details={details} />
+          )}
+
+          {/* Fallback rendering (if Workspace.content is missing/invalid) */}
+          {!hasValidWorkspaceContent && details?.number_cards && details.number_cards.items.length > 0 && (
             <NumberCardGrid cards={details.number_cards.items} />
           )}
 
-          {details?.shortcuts && details.shortcuts.items.length > 0 && (
+          {!hasValidWorkspaceContent && details?.shortcuts && details.shortcuts.items.length > 0 && (
             <ShortcutGrid 
               shortcuts={details.shortcuts.items}
               workspaceModule={workspace.module}
             />
           )}
 
-          {details?.cards && details.cards.items.length > 0 && (
+          {!hasValidWorkspaceContent && details?.cards && details.cards.items.length > 0 && (
             <LinkCardGrid 
               cards={details.cards.items}
               workspaceModule={workspace.module}
